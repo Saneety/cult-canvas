@@ -1,7 +1,7 @@
 {
   "id": "cult-canvas",
   "name": "Cult Canvas",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "minAppVersion": "1.15.0",
   "description": "Turn canvases into a whiteboard: sticky notes, shapes, a freehand marker, frames, layers, a minimap and a context menu. Needs Advanced Canvas.",
   "author": "Saneety",

@@ -165,11 +165,26 @@ test('entering editing keeps the rendered text until the editor has drawn its ow
   const src = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
   // the editor that is not ready yet is invisible, and the hidden rendered text is shown on top of it
   assert.ok(/iframe\.embed-iframe:not\(\.gb-ready\)\s*\{\s*opacity:\s*0;/.test(css), 'editor hidden until ready');
-  assert.ok(/:has\(> \.markdown-embed-content > iframe\.embed-iframe:not\(\.gb-ready\)\) > \.markdown-embed-content\[style\*="display: none"\]\s*\{\s*display: block !important;/.test(css), 'rendered text kept');
-  // a fallback swaps them by itself if the script never marks the editor ready
-  assert.ok(css.includes('@keyframes gb-editor-reveal') && css.includes('@keyframes gb-preview-hide'), 'CSS fallback');
-  assert.ok(/revealEditor\(iframe\)[\s\S]*?addClass\('gb-ready'\)/.test(src), 'main.js marks the editor ready');
+  assert.ok(/\.markdown-embed-content\.gb-preview-hold\s*\{\s*position: absolute;/.test(css), 'held text lies over the editor');
+  // the text is held in the same task as the editing event (before a frame is drawn), and let go with the reveal
+  assert.ok(/async styleEditor\(node\) \{\s*for \(let i = 0; i < 40; i\+\+\) \{\s*const iframe = [^\n]*\n\s*if \(iframe\) this\.holdPreview\(iframe\);/.test(src), 'held before the first await');
+  assert.ok(/holdPreview\(iframe\) \{[\s\S]*?addClass\('gb-preview-hold'\);\s*preview\.show\(\);[\s\S]*?window\.setTimeout\(iframe\.gbRelease, 800\)/.test(src), 'held, with a timeout');
+  assert.ok(/addClass\('gb-ready'\);\s*if \(iframe\.gbRelease\) iframe\.gbRelease\(\);/.test(src), 'let go in the frame the editor shows');
+  // a fallback shows the editor by itself if the script never marks it ready
+  assert.ok(css.includes('@keyframes gb-editor-reveal'), 'CSS fallback');
   assert.ok(/this\.applyEditorStyle\(node, iframe\);[\s\S]{0,120}this\.revealEditor\(iframe\)/.test(src), 'reveal follows styling');
+});
+
+// The plugin directory's CSS lint warns about both: !important and :has() (slow on a big canvas). Outweigh
+// Obsidian's rules with longer selectors, and mark states with classes from main.js instead.
+test('styles.css has no !important and no :has()', () => {
+  const css = fs.readFileSync(path.join(__dirname, 'styles.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  css.split('\n').forEach((l, i) => {
+    assert.ok(!/!\s*important/i.test(l), `!important at styles.css:${i + 1}`);
+    assert.ok(!/:has\(/.test(l), `:has() at styles.css:${i + 1}`);
+  });
+  const src = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
+  assert.ok(css.includes('html.gb-editor-root') && src.includes("doc.documentElement.addClass('gb-editor-root')"), 'editor root class');
 });
 
 test('layers: front and back move the selection past everything, keeping its own order', () => {
@@ -294,6 +309,20 @@ test('LICENSE is the plain MIT text, so GitHub and the plugin directory recogniz
   assert.ok(src.includes('Stephen Ruiz Ltd') && src.includes('SIL Open Font License'), 'main.js keeps the third-party notices');
 });
 
+test('feedback: both READMEs offer the language switch, the bug form and Discussions, and the form exists', () => {
+  const repo = 'https://github.com/Saneety/cult-canvas';
+  const forms = fs.readdirSync(path.join(__dirname, '.github/ISSUE_TEMPLATE'));
+  for (const [name, other] of [['README.md', 'README.ru.md'], ['README.ru.md', 'README.md']]) {
+    const text = fs.readFileSync(path.join(__dirname, name), 'utf8');
+    assert.ok(text.split('\n')[2].includes(`](${other})`), `${name}: the language switch right under the title`);
+    const form = text.match(new RegExp(`${repo}/issues/new\\?template=([\\w.-]+)`));
+    assert.ok(form && forms.includes(form[1]), `${name}: the bug form link names an existing form`);
+    assert.ok(text.includes(`](${repo}/discussions)`), `${name}: Discussions`);
+  }
+  const config = fs.readFileSync(path.join(__dirname, '.github/ISSUE_TEMPLATE/config.yml'), 'utf8');
+  for (const category of ['ideas', 'q-a']) assert.ok(config.includes(`${repo}/discussions/new?category=${category}`), category);
+});
+
 test('READMEs and guides use short hyphens, and their images, files and anchors exist', () => {
   // GitHub heading anchors: lower case, punctuation dropped, each space becomes a hyphen.
   const slug = (h) => h.trim().toLowerCase().replace(/[^\p{L}\p{M}\p{N}\p{Pc} -]/gu, '').replace(/ /g, '-');
@@ -392,6 +421,17 @@ test('manifest follows the Obsidian rules', () => {
   assert.ok(/^\d+\.\d+\.\d+$/.test(m.version) && versions[m.version] === m.minAppVersion, 'version');
   assert.ok(m.description.length <= 250 && m.description.endsWith('.') && !/obsidian|this plugin/i.test(m.description), 'description');
   assert.strictEqual(m.isDesktopOnly, true, 'electron clipboard: desktop only');
+});
+
+// The plugin directory recommends attested release files: the workflow attests and publishes the same three.
+test('the release workflow tests, attests and publishes main.js, manifest.json and styles.css', () => {
+  const wf = fs.readFileSync(path.join(__dirname, '.github/workflows/release.yml'), 'utf8');
+  const files = ['main.js', 'manifest.json', 'styles.css'];
+  assert.ok(/id-token: write/.test(wf) && /attestations: write/.test(wf) && /contents: write/.test(wf), 'permissions');
+  assert.ok(wf.includes('run: node main.test.js'), 'tests before the release');
+  const attest = wf.match(/uses: actions\/attest@v\d+\s+with:\s+subject-path: \|\s+([\s\S]*?)\n\s*\n/);
+  assert.ok(attest && files.every((f) => attest[1].includes(f)), 'attested files');
+  assert.ok(/gh release create[\s\S]*main\.js manifest\.json styles\.css/.test(wf), 'released files');
 });
 
 // The cheapest part of the community plugin review (eslint-plugin-obsidianmd), for the plugin's own code: the

@@ -1631,6 +1631,7 @@ class CultCanvasPlugin extends obsidian.Plugin {
   async styleEditor(node) {
     for (let i = 0; i < 40; i++) {
       const iframe = node.nodeEl && node.nodeEl.querySelector('iframe');
+      if (iframe) this.holdPreview(iframe);
       const doc = iframe && iframe.contentDocument;
       if (doc && doc.body && doc.body.classList.contains('canvas-node-iframe-body')) {
         try { this.applyEditorStyle(node, iframe); } catch (err) { console.error('Cult Canvas: editor style', err); }
@@ -1661,10 +1662,35 @@ class CultCanvasPlugin extends obsidian.Plugin {
     const color = themed ? getComputedStyle(node.nodeEl).getPropertyValue('--canvas-color').trim() : '';
     if (color) body.style.setProperty('--canvas-color', color);
     else body.style.removeProperty('--canvas-color');
+    doc.documentElement.addClass('gb-editor-root');
     body.addClass('gb-editor');
   }
 
-  // A new editor stays invisible under the rendered text (styles.css) until it has drawn its text in the
+  // Entering editing, Canvas hides the rendered text at once, but the new editor draws its text a frame or
+  // two later, so the card blinked empty. The editing event comes before that frame is drawn: keep the text
+  // shown on top of the editor (styles.css .gb-preview-hold) until revealEditor marks the editor ready, or
+  // for 0.8 s at most.
+  holdPreview(iframe) {
+    if (iframe.gbHeld || iframe.hasClass('gb-ready')) return;
+    iframe.gbHeld = true;
+    const content = iframe.closest('.canvas-node-content');
+    const preview = content && Array.from(content.children).find((el) =>
+      el.hasClass('markdown-embed-content') && el.style.display === 'none' && !el.contains(iframe));
+    if (!preview) return;
+    preview.gbHeldFor = iframe;
+    preview.addClass('gb-preview-hold');
+    preview.show();
+    iframe.gbRelease = () => {
+      if (preview.gbHeldFor !== iframe) return;
+      preview.gbHeldFor = null;
+      preview.removeClass('gb-preview-hold');
+      // When editing has ended meanwhile, Canvas has removed the editor and shows the text itself.
+      if (iframe.isConnected) preview.hide();
+    };
+    window.setTimeout(iframe.gbRelease, 800);
+  }
+
+  // A new editor stays invisible under the rendered text (holdPreview) until it has drawn its text in the
   // board font and the caret has settled: Canvas focuses the editor (caret at the start) and moves the caret
   // to the clicked spot a moment later. Then .gb-ready swaps them in one frame, so the card never blinks.
   revealEditor(iframe) {
@@ -1681,7 +1707,11 @@ class CultCanvasPlugin extends obsidian.Plugin {
       caret = now;
       const ready = settled && doc.body.hasClass('gb-editor') && !!doc.querySelector('.cm-content .cm-line')
         && (!this.fontBuffers || Array.from(doc.fonts).some((f) => f.family.replace(/["']/g, '') === FONT_FAMILY && f.status === 'loaded'));
-      if (ready || ++frames > 40) { iframe.addClass('gb-ready'); return; }
+      if (ready || ++frames > 40) {
+        iframe.addClass('gb-ready');
+        if (iframe.gbRelease) iframe.gbRelease();
+        return;
+      }
       window.requestAnimationFrame(step);
     };
     window.requestAnimationFrame(step);
