@@ -1,0 +1,5 @@
+# Plugin settings of a vault: never part of the plugin
+data.json
+
+node_modules/
+.tmp/
