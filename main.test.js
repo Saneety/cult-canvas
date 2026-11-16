@@ -285,6 +285,15 @@ test('main.js carries the vendored perfect-freehand', () => {
   assert.ok(!/[–—]/.test(src), 'only short hyphens');
 });
 
+test('LICENSE is the plain MIT text, so GitHub and the plugin directory recognize it', () => {
+  // Any extra paragraph turns GitHub's license detection into "Other"; third-party notices live in main.js.
+  const text = fs.readFileSync(path.join(__dirname, 'LICENSE'), 'utf8').replace(/\r\n/g, '\n');
+  assert.ok(text.startsWith('MIT License\n\nCopyright (c) '), 'starts like the MIT template');
+  assert.ok(text.trimEnd().endsWith('OTHER DEALINGS IN THE\nSOFTWARE.'), 'ends where the MIT template ends');
+  const src = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
+  assert.ok(src.includes('Stephen Ruiz Ltd') && src.includes('SIL Open Font License'), 'main.js keeps the third-party notices');
+});
+
 test('READMEs and guides use short hyphens, and their images, files and anchors exist', () => {
   // GitHub heading anchors: lower case, punctuation dropped, each space becomes a hyphen.
   const slug = (h) => h.trim().toLowerCase().replace(/[^\p{L}\p{M}\p{N}\p{Pc} -]/gu, '').replace(/ /g, '-');
