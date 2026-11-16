@@ -164,6 +164,13 @@ store them, so it stays.
 (Node 18 or later). `node scripts/install.mjs <vault>` copies the plugin into a vault for a manual check;
 `scripts/fetch-font.mjs` and `scripts/embed-font.mjs` refresh the embedded font.
 
+Releases are built by GitHub Actions. Raise the version in `manifest.json` and `versions.json`, commit, then push
+an annotated tag equal to that version, its message being the release notes (`git tag -a 0.1.2 -m "..."`,
+`git push origin 0.1.2`). `.github/workflows/release.yml` runs the tests, attests `main.js`, `manifest.json` and
+`styles.css` and publishes the release. Check a downloaded file with
+`gh attestation verify main.js --repo Saneety/cult-canvas`. Keep `!important` and `:has()` out of `styles.css`:
+the plugin directory's CSS check warns about them, and a test fails on them.
+
 The plugin makes no network requests and reads nothing outside the vault except the image files you pick to
 insert. The font is embedded in `main.js`.
 

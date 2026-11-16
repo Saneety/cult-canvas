@@ -164,6 +164,13 @@
 новее). `node scripts/install.mjs <хранилище>` копирует плагин в хранилище для ручной проверки;
 `scripts/fetch-font.mjs` и `scripts/embed-font.mjs` обновляют встроенный шрифт.
 
+Релизы собирает GitHub Actions. Подними версию в `manifest.json` и `versions.json`, закоммить и запушь
+аннотированный тег с этой версией, его текст станет заметками релиза (`git tag -a 0.1.2 -m "..."`,
+`git push origin 0.1.2`). `.github/workflows/release.yml` прогоняет проверки, подписывает аттестацией `main.js`,
+`manifest.json` и `styles.css` и публикует релиз. Скачанный файл проверяется командой
+`gh attestation verify main.js --repo Saneety/cult-canvas`. В `styles.css` не должно быть `!important` и
+`:has()`: на них ругается проверка CSS в каталоге плагинов, и падает тест.
+
 Плагин не ходит в сеть и вне хранилища читает только картинки, которые ты сам выбрал для вставки. Шрифт
 встроен в `main.js`.
 
