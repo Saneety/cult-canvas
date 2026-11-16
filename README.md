@@ -59,7 +59,7 @@ A board is a [JSON Canvas](https://jsoncanvas.org) file. Cult Canvas adds only a
 
 ## Privacy
 
-No network requests, accounts or telemetry. The font ships inside the plugin.
+No network requests, accounts or telemetry. The plugin reads a file outside the vault only when you pick an image from your computer to insert, and copies that image into the vault. The font ships inside the plugin.
 
 ## License
 
