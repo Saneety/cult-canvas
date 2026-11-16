@@ -1,177 +1,66 @@
 # Cult Canvas
 
-Turns Obsidian canvases into a whiteboard: a dark board with a handwritten font, sticky notes, shapes, a
-freehand marker, frames, layers, a minimap and a context menu with hotkeys. Boards stay ordinary `.canvas`
-files (JSON Canvas), so you can edit them in Obsidian and scripts or AI agents can edit the file directly.
+**Turn Obsidian canvases into a whiteboard.** Sticky notes, shapes, a freehand marker, frames, layers and a minimap on top of the core Canvas. Your boards stay plain `.canvas` files with working `[[links]]`.
 
-[Русская версия](README.ru.md)
+[Install](#install) · [Shortcuts](#shortcuts) · [Full guide](docs/guide.md) · [Releases](https://github.com/Saneety/cult-canvas/releases) · [Русский](README.ru.md)
 
-![A board with sticky notes, shapes, marker lines and a frame](docs/board.png)
+![Building a board: a sticky note, a diamond, an arrow between them, a marker loop and an Alt+drag copy](docs/hero.gif)
 
-## Requirements
+## What you get
 
-- **[Advanced Canvas](https://github.com/Developer-Mike/obsidian-advanced-canvas)** (community plugin
-  `advanced-canvas`, tested with 7.1.2). It provides the shapes, card styles and canvas events Cult Canvas
-  builds on. Without it marker lines, sticky notes and text sizes disappear after undo or reload, and the
-  plugin shows a notice.
-- Obsidian on desktop (Windows, macOS, Linux). The plugin is desktop only: copying uses the desktop
-  clipboard.
+- **A toolbar with one-key tools**: Select `V`, Hand `H`, Sticky note `S`, Text `T`, Shape `R`, Marker `P`, Eraser `E`, Frame `F`, Image or note `I`.
+- **Click to place, type right away**: sticky notes, borderless text and seven shapes (rectangle, oval, diamond, circle, parallelogram, document, database).
+- **A freehand marker** in five colors, 1 to 30 px wide, to circle, underline and point. The eraser removes whole lines.
+- **Frames** with titles split the board into parts.
+- **Copies and layers**: Alt+drag leaves the original and moves a copy, Ctrl+D duplicates, `]` and `[` bring to front and send to back.
+- **A right-click menu** with copy, layers, duplicate and delete, shortcuts shown.
+- **Your last style becomes the default**: make one arrow square and the next ones come out square.
+- **The selection box catches arrows** too, even when both ends are outside it.
+- **A minimap**, zoom buttons and a snap-to-grid switch.
+- **A handwritten font** (Shantell Sans, Latin and Cyrillic) built in, nothing to install.
+- **English and Russian** interface.
+
+<p>
+<img src="docs/listing/1-whiteboard.png" width="49%" alt="A whiteboard inside Obsidian Canvas">
+<img src="docs/listing/2-shapes.png" width="49%" alt="The shape panel over a flowchart">
+<img src="docs/listing/3-marker.png" width="49%" alt="The marker panel with colors and width">
+<img src="docs/listing/4-menu.png" width="49%" alt="The right-click menu with copy and layers">
+</p>
 
 ## Install
 
-From Obsidian, once the plugin is in the community catalog: **Settings → Community plugins → Browse**,
-search for "Cult Canvas", install and enable it, together with Advanced Canvas.
+Cult Canvas needs the [Advanced Canvas](https://github.com/Developer-Mike/obsidian-advanced-canvas) plugin: it provides the shapes and card styles Cult Canvas builds on.
 
-By hand: download `main.js`, `manifest.json` and `styles.css` from the
-[latest release](https://github.com/Saneety/cult-canvas/releases/latest) into
-`<your vault>/.obsidian/plugins/cult-canvas/`, then enable the plugin in **Settings → Community plugins**.
+1. In **Settings → Community plugins → Browse**, install and enable **Advanced Canvas**.
+2. Search for **Cult Canvas**, install and enable it.
+3. Open any `.canvas` file: the toolbar is on the left.
 
-The board turns on by itself on every `.canvas` file of the vault.
+Not in the catalog yet? Download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/Saneety/cult-canvas/releases/latest) into `<your vault>/.obsidian/plugins/cult-canvas/` and enable the plugin. Desktop only (Windows, macOS, Linux).
 
-## Tools
+## Shortcuts
 
-The toolbar is on the left of every canvas. Hotkeys work while the cursor is not in a card's text.
-
-| Key | Tool | What it does |
-|---|---|---|
-| V | Select | the usual Canvas selection: click, selection box, drag |
-| H | Hand | pan the board |
-| S | Sticky note | click for a 220x220 note, drag for your own size; typing starts at once |
-| T | Text | text without a border |
-| R | Shape | rectangle, oval, diamond, circle, parallelogram, document, database (pick it in the panel) |
-| P | Marker | freehand lines; the panel has a width slider (1-30 px) and 5 colours; a line keeps one width along its length however fast you move |
-| E | Eraser | erases the marker lines you drag over |
-| F | Frame | a section with a title (a Canvas group) |
-| I | Insert | an image from your computer, an image or a note from the vault |
-| Esc | | back to Select |
-| Space | | hold and drag to pan with any tool |
-
-Bottom right: zoom (minus, percent - a click resets to 100%, plus), fit everything, snap to grid and the
-minimap (click or drag it to move the board). The mouse wheel, Ctrl+Z and Ctrl+Shift+Z work as in Canvas;
-marker lines are undone too.
-
-Snapping to the grid is off by default, so cards, shapes and frames go exactly where you drag them. The grid
-button (and the command "Toggle snap to grid") turns it on; it is the same setting as in the Canvas settings
-menu and is shared by all canvases of the vault. Snapping to the edges of nearby cards stays (it is in the
-Canvas menu as well); holding Ctrl while dragging turns both off.
-
-## Selection, copies, layers
-
-- A selection box (drag on an empty spot) also selects the arrows whose line it touches, even when both ends
-  are outside. With Shift the box adds to the selection and removes what was already selected.
-- Alt + drag leaves the original in place and drags a copy. Ctrl+D duplicates the selection next to it.
-- Layers: `]` brings to front, `[` sends to back, Ctrl+] brings one layer forward, Ctrl+[ sends one layer
-  backward (a step goes past the nearest element that overlaps the selection). The layer order is the order of
-  nodes in the file. Dragging and selecting do not change layers, so a big background never jumps above the
-  small cards on it. Frames (Canvas groups) always lie under cards: that is how Canvas draws them.
-- Every layer change can be undone with Ctrl+Z.
-
-On macOS use Cmd instead of Ctrl; Canvas itself makes a copy on Alt + drag there.
-
-## Last style becomes the default
-
-New elements get the style you last gave an element of the same kind: make an arrow square and the next
-arrows are square too. Arrows, cards, sticky notes, borderless text, frames and every shape remember their
-own style. Remembered: colour, text size, alignment, border, and for arrows also the line shape, dashes and
-ends; not the size or the text. Undo, paste and copies are not remembered. The memory is kept in the plugin
-settings (`data.json`, field `styleDefaults`).
-
-## Context menu
-
-Right-click a card or an arrow, or press "..." at the end of the popup above the selection. The menu has
-Copy at the top, then layers and Duplicate, then the items of Canvas and Advanced Canvas, Delete at the
-bottom, with hotkeys on the right.
-
-![The context menu with layers and hotkeys](docs/menu.png)
-
-A card's text looks finished while you type: the same font, size, colour, alignment and padding, and a
-diamond stays a diamond. Entering edit mode does not flicker.
-
-Arrows are drawn from the dots on the edges of a card; double-click an arrow to label it.
-
-## Card popup
-
-A selected card has the Advanced Canvas buttons above it and two of Cult Canvas:
-
-- "Card type": card, sticky note, text without border;
-- "Text size": S, M, L, XL.
-
-The colour from the standard button paints a sticky note, borderless text, a shape's border and a marker
-line.
-
-## Links to notes
-
-Any words in double square brackets in a card are a link: `Build the [[furnace]]`. The first click selects
-the card, the second opens the note in the same tab (that is how Obsidian Canvas works; go back with the
-back arrow). A link to a note that does not exist yet is dimmer. Restart Obsidian (Ctrl+R) once after you
-first enable Advanced Canvas, so links in canvases reach backlinks and the graph.
-
-## Settings
-
-**Language**: English (default) or Russian, for the toolbar, the menus, the notices and the commands. The
-two card popup buttons stay in English, as do the other buttons of the Advanced Canvas popup.
-
-## Format for scripts and agents
-
-A canvas is JSON with `nodes` and `edges`. Advanced Canvas adds
-`"metadata": {"version": "1.0-1.0", "frontmatter": {}}` at the root: leave it as it is. Obsidian picks up an
-edit of the file on disk even while the board is open. New ids are 16 hex characters, unique in the file.
-
-| What | Node |
+| Key | Action |
 |---|---|
-| Card | `{"type":"text","text":"...","x","y","width","height"}` |
-| Sticky note | the same + `"styleAttributes":{"gbKind":"sticky"}` |
-| Text without border | `"styleAttributes":{"gbKind":"text"}` |
-| Text size | `"gbSize":"s"`, `"l"` or `"xl"` in `styleAttributes` (no field - M) |
-| Shape | `"styleAttributes":{"shape":"diamond","textAlign":"center"}`; shapes: `pill`, `diamond`, `circle`, `parallelogram`, `document`, `database`, `predefined-process`; no `shape` - rectangle |
-| Frame | `{"type":"group","label":"Act 1","x","y","width","height"}`; cards belong to it by their coordinates |
-| Note, image | `{"type":"file","file":"path/in/vault.md", ...}` |
-| Colour | `"color":"1"`...`"6"` (the Obsidian palette) or `"#RRGGBB"` |
+| `V` `H` `S` `T` `R` `P` `E` `F` `I` | tools, in the order of the toolbar |
+| Esc | back to Select |
+| Space + drag | pan with any tool |
+| Alt + drag | move a copy, leave the original |
+| Ctrl+D | duplicate |
+| `]` / `[` | bring to front / send to back |
+| Ctrl+] / Ctrl+[ | one layer forward / backward |
+| Shift + selection box | add to the selection or take out of it |
+| Ctrl+Z / Ctrl+Shift+Z | undo / redo, marker lines included |
 
-An arrow: `{"id","fromNode","fromSide","toNode","toSide","label":"needs"}`, sides are `top`, `right`,
-`bottom`, `left`.
+On macOS use Cmd instead of Ctrl. Tool keys work while you are not typing in a card.
 
-A marker line is a text node with empty text:
+## For scripts and AI agents
 
-```json
-{"id":"...","type":"text","text":"","x":94,"y":44,"width":112,"height":42,"color":"#FF5A3D",
- "gbStroke":{"v":1,"size":5,"w":112,"h":42,"points":[[6,6],[56,36],[106,6]]}}
-```
-
-`points` are the points of the line from the node's top left corner, `size` is the width in pixels (the
-slider gives 1-30), `w` and `h` are the node size when the line was drawn (stretch the node and the line
-stretches with it). Marker colours: `#FF5A3D`, `#EDEDED`, `#FFD54A`, `#5DB2FF`, `#7CE8A6`. Without the plugin
-such a node shows as an empty card.
-
-The `gb` prefix of these fields and of the CSS classes comes from the plugin's working name; boards already
-store them, so it stays.
+A board is a [JSON Canvas](https://jsoncanvas.org) file. Cult Canvas adds only a few fields: a sticky note is a text node with `"styleAttributes": {"gbKind": "sticky"}`, a marker line is a text node with empty text and a `gbStroke` field. Obsidian picks up changes on disk while the board is open, so a script or an agent can draw on it. The whole format is in the [guide](docs/guide.md#format-for-scripts-and-agents).
 
 ## Privacy
 
-The plugin makes no network requests, has no accounts, ads or telemetry, and reads nothing outside the vault
-except the image files you pick to insert. The font is embedded in `main.js`.
-
-## Limitations
-
-- The plugin relies on internal parts of Obsidian Canvas and Advanced Canvas that have no public API; an update
-  of either can break something until the plugin is updated.
-- Card text does not grow its card (resize it by hand).
-- Tested on Windows. macOS, Linux and popout windows have not been tested.
-- Comments, reactions, a timer, kanban and real-time collaboration are left out on purpose.
-
-## Development
-
-`main.js` is the source: plain CommonJS with no build step. Tests of the pure logic: `node main.test.js`
-(Node 18 or later). `node scripts/install.mjs <vault>` copies the plugin into a vault for a manual check;
-`scripts/fetch-font.mjs` and `scripts/embed-font.mjs` refresh the embedded font.
+No network requests, accounts or telemetry. The font ships inside the plugin.
 
 ## License
 
-[MIT](LICENSE) © 2026 Saneety.
-
-Third-party parts, both inside `main.js`:
-
-- [perfect-freehand](https://github.com/steveruizok/perfect-freehand) 1.2.3, MIT, Copyright (c) 2021 Stephen
-  Ruiz Ltd, for the shape of marker lines.
-- [Shantell Sans](https://github.com/arrowtype/shantell-sans), Copyright 2022 The Shantell Sans Project
-  Authors, SIL Open Font License 1.1 ([OFL.txt](OFL.txt)), embedded as latin, latin-ext and cyrillic subsets.
+[MIT](LICENSE) © 2026 Saneety. Includes [perfect-freehand](https://github.com/steveruizok/perfect-freehand) (MIT) and [Shantell Sans](https://github.com/arrowtype/shantell-sans) (SIL Open Font License 1.1, [OFL.txt](OFL.txt)).

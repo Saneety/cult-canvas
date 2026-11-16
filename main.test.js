@@ -285,13 +285,37 @@ test('main.js carries the vendored perfect-freehand', () => {
   assert.ok(!/[–—]/.test(src), 'only short hyphens');
 });
 
-test('both READMEs exist, use short hyphens and show only images that are in the repository', () => {
-  for (const name of ['README.md', 'README.ru.md']) {
-    const text = fs.readFileSync(path.join(__dirname, name), 'utf8');
+test('READMEs and guides use short hyphens, and their images, files and anchors exist', () => {
+  // GitHub heading anchors: lower case, punctuation dropped, each space becomes a hyphen.
+  const slug = (h) => h.trim().toLowerCase().replace(/[^\p{L}\p{M}\p{N}\p{Pc} -]/gu, '').replace(/ /g, '-');
+  const docs = ['README.md', 'README.ru.md', 'docs/guide.md', 'docs/guide.ru.md'];
+  const texts = Object.fromEntries(docs.map((d) => [d, fs.readFileSync(path.join(__dirname, d), 'utf8')]));
+  const anchors = Object.fromEntries(docs.map((d) => [d, new Set([...texts[d].matchAll(/^#{1,6} (.+)$/gm)].map((m) => slug(m[1])))]));
+  for (const name of docs) {
+    const text = texts[name];
     assert.ok(!/[–—]/.test(text), `${name}: only short hyphens`);
     assert.ok(text.includes('Advanced Canvas') && text.includes('perfect-freehand') && text.includes('Shantell Sans'), name);
-    for (const [, file] of text.matchAll(/!\[[^\]]*\]\(([^)]+)\)/g)) {
-      assert.ok(fs.existsSync(path.join(__dirname, file)), `${name}: image ${file} is missing`);
+    if (name.startsWith('README')) {
+      // Obsidian's plugin browser shows every line break, so a README paragraph or list item stays on one line.
+      const lines = text.split('\n');
+      let code = false;
+      lines.forEach((line, i) => {
+        if (line.startsWith('```')) code = !code;
+        const prev = lines[i - 1] || '';
+        const wrapped = !code && i > 0 && line.trim() && prev.trim()
+          && !/^\s*(#|[-*] |\||\d+\. |<|```|!\[)/.test(line) && !/^(#|\||<|```|\s*!\[)/.test(prev);
+        assert.ok(!wrapped, `${name}:${i + 1} continues the line above; keep a paragraph on one line`);
+      });
+    }
+    const targets = [...text.matchAll(/\]\(([^)\s]+)\)/g), ...text.matchAll(/<img src="([^"]+)"/g)]
+      .map((m) => m[1]).filter((u) => !/^https?:/.test(u));
+    assert.ok(targets.length > 3, `${name}: has local links`);
+    for (const target of targets) {
+      const [file, anchor] = target.split('#');
+      const abs = file ? path.join(path.dirname(path.join(__dirname, name)), file) : path.join(__dirname, name);
+      assert.ok(fs.existsSync(abs), `${name}: ${target} is missing`);
+      const rel = path.relative(__dirname, abs).replace(/\\/g, '/');
+      if (anchor) assert.ok(anchors[rel] && anchors[rel].has(anchor), `${name}: no heading for ${target}`);
     }
   }
 });
