@@ -1,8 +1,10 @@
 # Cult Canvas
 
+**English** · [Русский](README.ru.md)
+
 **Turn Obsidian canvases into a whiteboard.** Sticky notes, shapes, a freehand marker, frames, layers and a minimap on top of the core Canvas. Your boards stay plain `.canvas` files with working `[[links]]`.
 
-[Install](#install) · [Shortcuts](#shortcuts) · [Full guide](docs/guide.md) · [Releases](https://github.com/Saneety/cult-canvas/releases) · [Русский](README.ru.md)
+[Install](#install) · [Shortcuts](#shortcuts) · [Full guide](docs/guide.md) · [Feedback](#feedback) · [Releases](https://github.com/Saneety/cult-canvas/releases)
 
 ![Building a board: a sticky note, a diamond, an arrow between them, a marker loop and an Alt+drag copy](docs/hero.gif)
 
@@ -35,7 +37,7 @@ Cult Canvas needs the [Advanced Canvas](https://github.com/Developer-Mike/obsidi
 2. Search for **Cult Canvas**, install and enable it.
 3. Open any `.canvas` file: the toolbar is on the left.
 
-Not in the catalog yet? Download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/Saneety/cult-canvas/releases/latest) into `<your vault>/.obsidian/plugins/cult-canvas/` and enable the plugin. Desktop only (Windows, macOS, Linux).
+To install by hand, download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/Saneety/cult-canvas/releases/latest) into `<your vault>/.obsidian/plugins/cult-canvas/` and enable the plugin. Desktop only (Windows, macOS, Linux).
 
 ## Shortcuts
 
@@ -56,6 +58,10 @@ On macOS use Cmd instead of Ctrl. Tool keys work while you are not typing in a c
 ## For scripts and AI agents
 
 A board is a [JSON Canvas](https://jsoncanvas.org) file. Cult Canvas adds only a few fields: a sticky note is a text node with `"styleAttributes": {"gbKind": "sticky"}`, a marker line is a text node with empty text and a `gbStroke` field. Obsidian picks up changes on disk while the board is open, so a script or an agent can draw on it. The whole format is in the [guide](docs/guide.md#format-for-scripts-and-agents).
+
+## Feedback
+
+Found a bug? [Report it](https://github.com/Saneety/cult-canvas/issues/new?template=bug_report.yml). An idea or a question? Write in [Discussions](https://github.com/Saneety/cult-canvas/discussions), where you can also upvote other people's ideas. English and Russian are both fine.
 
 ## Privacy
 

@@ -1,0 +1,50 @@
+name: Bug report / Ошибка
+description: Something does not work as it should. / Что-то работает не так.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for the report! English and Russian are both fine. / Спасибо! Можно по-русски.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened / Что случилось
+      description: What you did, what you expected and what you got instead. A screenshot or a short video helps a lot. / Что делал, что ожидал и что получилось. Скриншот или короткое видео очень помогут.
+      placeholder: |
+        1. Picked the marker (P)
+        2. Drew a line over a sticky note
+        3. The line disappeared
+    validations:
+      required: true
+  - type: input
+    id: obsidian
+    attributes:
+      label: Obsidian version / Версия Obsidian
+      description: Settings → About / Настройки → О программе
+      placeholder: "1.15.1"
+    validations:
+      required: true
+  - type: input
+    id: plugins
+    attributes:
+      label: Cult Canvas and Advanced Canvas versions / Версии Cult Canvas и Advanced Canvas
+      description: Settings → Community plugins / Настройки → Сторонние плагины
+      placeholder: "Cult Canvas 0.1.1, Advanced Canvas 7.1.2"
+    validations:
+      required: true
+  - type: dropdown
+    id: system
+    attributes:
+      label: System / Система
+      options:
+        - Windows
+        - macOS
+        - Linux
+    validations:
+      required: true
+  - type: textarea
+    id: console
+    attributes:
+      label: Errors in the console (optional) / Ошибки в консоли (необязательно)
+      description: Ctrl+Shift+I (Cmd+Option+I on macOS) → Console, copy the red lines that mention Cult Canvas. / Ctrl+Shift+I (на macOS Cmd+Option+I) → Console, скопируй красные строки, где есть Cult Canvas.
+      render: text

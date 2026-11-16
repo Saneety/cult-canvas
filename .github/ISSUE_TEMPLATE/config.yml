@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Idea or wish / Идея или пожелание
+    url: https://github.com/Saneety/cult-canvas/discussions/new?category=ideas
+    about: Suggest a feature or upvote other people's ideas. / Предложи функцию или поддержи чужие идеи.
+  - name: Question / Вопрос
+    url: https://github.com/Saneety/cult-canvas/discussions/new?category=q-a
+    about: How to do something on a board. / Как сделать что-то на доске.

@@ -1,8 +1,10 @@
 # Cult Canvas
 
+[English](README.md) · **Русский**
+
 **Превращает канвасы Obsidian в доску.** Стикеры, фигуры, маркер от руки, разделы, слои и миникарта поверх обычного Canvas. Доски остаются простыми файлами `.canvas`, ссылки `[[...]]` в них работают.
 
-[Установка](#установка) · [Горячие клавиши](#горячие-клавиши) · [Подробный гайд](docs/guide.ru.md) · [Релизы](https://github.com/Saneety/cult-canvas/releases) · [English](README.md)
+[Установка](#установка) · [Горячие клавиши](#горячие-клавиши) · [Подробный гайд](docs/guide.ru.md) · [Обратная связь](#обратная-связь) · [Релизы](https://github.com/Saneety/cult-canvas/releases)
 
 ![Сборка доски: стикер, ромб, стрелка между ними, обводка маркером и копия через Alt+перетаскивание](docs/hero.gif)
 
@@ -35,7 +37,7 @@ Cult Canvas работает поверх плагина [Advanced Canvas](https
 2. Найди **Cult Canvas**, установи и включи.
 3. Открой любой `.canvas`: панель инструментов слева.
 
-Пока плагина нет в каталоге: скачай `main.js`, `manifest.json` и `styles.css` из [последнего релиза](https://github.com/Saneety/cult-canvas/releases/latest) в `<хранилище>/.obsidian/plugins/cult-canvas/` и включи плагин. Язык - в настройках плагина. Только для компьютера (Windows, macOS, Linux).
+Чтобы поставить вручную, скачай `main.js`, `manifest.json` и `styles.css` из [последнего релиза](https://github.com/Saneety/cult-canvas/releases/latest) в `<хранилище>/.obsidian/plugins/cult-canvas/` и включи плагин. Язык - в настройках плагина. Только для компьютера (Windows, macOS, Linux).
 
 ## Горячие клавиши
 
@@ -56,6 +58,10 @@ Cult Canvas работает поверх плагина [Advanced Canvas](https
 ## Для скриптов и ИИ-агентов
 
 Доска - это файл [JSON Canvas](https://jsoncanvas.org). Cult Canvas добавляет всего пару полей: стикер - текстовый узел с `"styleAttributes": {"gbKind": "sticky"}`, линия маркера - текстовый узел с пустым текстом и полем `gbStroke`. Obsidian подхватывает правку файла на диске и при открытой доске, так что скрипт или агент может рисовать на ней. Весь формат - в [гайде](docs/guide.ru.md#формат-для-скриптов-и-агентов).
+
+## Обратная связь
+
+Что-то сломалось? [Напиши об ошибке](https://github.com/Saneety/cult-canvas/issues/new?template=bug_report.yml). Есть идея или вопрос? Пиши в [Discussions](https://github.com/Saneety/cult-canvas/discussions), там же можно поддержать чужие идеи. Можно по-русски.
 
 ## Приватность
 
