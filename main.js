@@ -96,7 +96,8 @@ const MOD_LABEL = IS_MAC ? '⌘' : 'Ctrl';
 
 // styleDefaults: element kind -> its last applied style (see styleKindOf and styleSnapshot)
 // language: interface language, a key of STRINGS
-const DEFAULT_SETTINGS = { language: 'en', markerColor: 'red', markerWidth: MARKER_WIDTH.def, shape: 'rect', minimap: true, gridDefaultApplied: false, styleDefaults: {} };
+// markerColor: a MARKER_COLORS id or a colour of one's own '#RRGGBB'; markerRecentColors: the own colours, newest first
+const DEFAULT_SETTINGS = { language: 'en', markerColor: 'red', markerRecentColors: [], markerWidth: MARKER_WIDTH.def, shape: 'rect', minimap: true, gridDefaultApplied: false, styleDefaults: {} };
 
 // ---------------------------------------------------------------- interface text
 
@@ -116,7 +117,8 @@ const STRINGS = {
     'insert.imageDisk': 'Image from computer…', 'insert.imageVault': 'Image from vault…', 'insert.imageVaultPick': 'Image from vault',
     'insert.note': 'Note from vault…', 'insert.notePick': 'Note from vault',
     'menu.copy': 'Copy', 'menu.front': 'Bring to front', 'menu.forward': 'Bring forward', 'menu.backward': 'Send backward',
-    'menu.back': 'Send to back', 'menu.duplicate': 'Duplicate', 'menu.more': 'More',
+    'menu.back': 'Send to back', 'menu.duplicate': 'Duplicate', 'menu.more': 'More', 'menu.removeBends': 'Remove bend points',
+    'marker.addColor': 'Add a color', 'marker.ownColor': 'Color {hex}',
     'command.tool': 'Tool: {tool}', 'command.grid': 'Toggle snap to grid',
     'notice.failed': 'Cult Canvas: that did not work, details are in the developer console.',
     'notice.imageFailed': 'Cult Canvas: could not add {name}.',
@@ -137,7 +139,8 @@ const STRINGS = {
     'insert.imageDisk': 'Картинка с компьютера…', 'insert.imageVault': 'Картинка из хранилища…', 'insert.imageVaultPick': 'Картинка из хранилища',
     'insert.note': 'Заметка из хранилища…', 'insert.notePick': 'Заметка из хранилища',
     'menu.copy': 'Копировать', 'menu.front': 'На передний план', 'menu.forward': 'Перенести вперёд', 'menu.backward': 'Перенести назад',
-    'menu.back': 'На задний план', 'menu.duplicate': 'Дублировать', 'menu.more': 'Ещё',
+    'menu.back': 'На задний план', 'menu.duplicate': 'Дублировать', 'menu.more': 'Ещё', 'menu.removeBends': 'Убрать узлы',
+    'marker.addColor': 'Добавить цвет', 'marker.ownColor': 'Цвет {hex}',
     'command.tool': 'Инструмент: {tool}', 'command.grid': 'Привязка к сетке: вкл/выкл',
     'notice.failed': 'Cult Canvas: не получилось, подробности в консоли разработчика.',
     'notice.imageFailed': 'Cult Canvas: не удалось добавить {name}.',
@@ -435,6 +438,208 @@ function polylineHitsRect(points, r) {
   return false;
 }
 
+// ---------- bend points of arrows (gbWaypoints: [[x, y], ...] in canvas coordinates, see README.md)
+
+const EDGE_STUB = 7; // Canvas starts and ends the line this far out from the card side, under the arrowhead
+const EDGE_CURVE_MAX = 150; // the longest control arm of an end of a curve, as in Canvas
+const BEND_SNAP_PX = 8; // a dragged bend point lines up with its neighbours this close on screen
+const SIDE_NORMALS = { top: [0, -1], right: [1, 0], bottom: [0, 1], left: [-1, 0] };
+const SIDE_DEGREES = { top: 180, bottom: 0, left: 90, right: 270 }; // Canvas turns an arrowhead on a side this much
+
+function isValidWaypoints(w) {
+  return Array.isArray(w) && w.length > 0 && w.every((p) => Array.isArray(p) && p.length >= 2 && Number.isFinite(p[0]) && Number.isFinite(p[1]));
+}
+
+// The middle of a side of a box { minX, minY, maxX, maxY }, where Canvas attaches an arrow.
+function sideCenter(box, side) {
+  const cx = (box.minX + box.maxX) / 2, cy = (box.minY + box.maxY) / 2;
+  if (side === 'top') return { x: cx, y: box.minY };
+  if (side === 'bottom') return { x: cx, y: box.maxY };
+  if (side === 'left') return { x: box.minX, y: cy };
+  return { x: box.maxX, y: cy };
+}
+
+// The rotation of an arrowhead (its tip at 0,0 pointing up) that travels from a to b: the CSS rotate() of Canvas.
+function arrowDegrees(a, b) {
+  const deg = (Math.atan2(b.x - a.x, -(b.y - a.y)) * 180) / Math.PI;
+  return Math.round(((deg % 360) + 360) % 360 * 100) / 100;
+}
+
+const fmt = (v) => Math.round(v * 100) / 100;
+const pt = (x, y) => ({ x, y });
+const unit = (dx, dy) => { const l = Math.hypot(dx, dy); return l > 1e-9 ? [dx / l, dy / l] : [0, 0]; };
+const bezierAt = (p0, c1, c2, p1, t) => {
+  const u = 1 - t;
+  const a = u * u * u, b = 3 * t * u * u, c = 3 * t * t * u, d = t * t * t;
+  return pt(a * p0.x + b * c1.x + c * c2.x + d * p1.x, a * p0.y + b * c1.y + c * c2.y + d * p1.y);
+};
+
+function polylineLength(points) {
+  let len = 0;
+  for (let i = 1; i < points.length; i++) len += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+  return len;
+}
+
+// The point halfway along a polyline of {x, y}.
+function polylineMiddle(points) {
+  if (points.length === 1) return pt(points[0].x, points[0].y);
+  let left = polylineLength(points) / 2;
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1], b = points[i];
+    const l = Math.hypot(b.x - a.x, b.y - a.y);
+    if (l >= left && l > 0) return pt(a.x + ((b.x - a.x) * left) / l, a.y + ((b.y - a.y) * left) / l);
+    left -= l;
+  }
+  const last = points[points.length - 1];
+  return pt(last.x, last.y);
+}
+
+// The route of an arrow from the side centre `start` to the side centre `end` through bend points, in the shape of
+// the Advanced Canvas pathfinding method: 'direct' - straight segments, 'square' - right angles (the line leaves and
+// enters the cards square to their sides), anything else - a smooth curve through the points (its ends leave the
+// sides square, as a plain Canvas arrow does). `ends` says which ends have an arrowhead: there the line stops under
+// it, elsewhere it reaches the card. Returns the SVG path `d`, the sampled `line` [[x, y], ...] from start to end,
+// `mids` - the middle of each segment between the points, `center` - halfway along, and the arrowhead rotations.
+function edgeRoute(start, fromSide, end, toSide, waypoints, method, ends = { from: false, to: true }) {
+  const w = waypoints.map((p) => pt(p[0], p[1]));
+  const nf = SIDE_NORMALS[fromSide] || [1, 0], nt = SIDE_NORMALS[toSide] || [-1, 0];
+  let s, c, fromDeg, toDeg;
+  if (method === 'direct') {
+    const d0 = unit(w[0].x - start.x, w[0].y - start.y);
+    const d1 = unit(end.x - w[w.length - 1].x, end.y - w[w.length - 1].y);
+    s = pt(start.x + d0[0] * EDGE_STUB, start.y + d0[1] * EDGE_STUB);
+    c = pt(end.x - d1[0] * EDGE_STUB, end.y - d1[1] * EDGE_STUB);
+    fromDeg = arrowDegrees(w[0], start);
+    toDeg = arrowDegrees(w[w.length - 1], end);
+  } else {
+    s = pt(start.x + nf[0] * EDGE_STUB, start.y + nf[1] * EDGE_STUB);
+    c = pt(end.x + nt[0] * EDGE_STUB, end.y + nt[1] * EDGE_STUB);
+    fromDeg = SIDE_DEGREES[fromSide] ?? 0;
+    toDeg = SIDE_DEGREES[toSide] ?? 0;
+  }
+  const P = [s, ...w, c];
+  const segs = []; // per segment: { d: path commands after its first point, pts: its sampled points }
+  if (method === 'direct') {
+    for (let i = 0; i + 1 < P.length; i++) segs.push({ d: `L${fmt(P[i + 1].x)},${fmt(P[i + 1].y)}`, pts: [P[i], P[i + 1]] });
+  } else if (method === 'square') {
+    let horizontal = fromSide === 'left' || fromSide === 'right';
+    const endHorizontal = toSide === 'left' || toSide === 'right';
+    for (let i = 0; i + 1 < P.length; i++) {
+      const a = P[i], b = P[i + 1];
+      const last = i + 2 === P.length;
+      // Each leg goes on along the way it came, then turns; the last leg turns so that it enters square to the side.
+      const firstH = last ? !endHorizontal : horizontal;
+      const corner = firstH ? pt(b.x, a.y) : pt(a.x, b.y);
+      const pts = [a, corner, b].filter((p, k, arr) => k === 0 || Math.hypot(p.x - arr[k - 1].x, p.y - arr[k - 1].y) > 1e-6);
+      if (pts.length === 1) pts.push(b);
+      segs.push({ d: pts.slice(1).map((p) => `L${fmt(p.x)},${fmt(p.y)}`).join(' '), pts });
+      const p1 = pts[pts.length - 2], p2 = pts[pts.length - 1];
+      horizontal = Math.abs(p2.x - p1.x) > Math.abs(p2.y - p1.y); // the way the leg came into the point
+    }
+  } else {
+    // A curve through the points: inside, the tangent follows the neighbours; the ends leave the sides square.
+    const n = P.length - 1;
+    const dir = P.map((p, i) => {
+      if (i === 0) return nf;
+      if (i === n) return [-nt[0], -nt[1]];
+      return unit(P[i + 1].x - P[i - 1].x, P[i + 1].y - P[i - 1].y);
+    });
+    for (let i = 0; i < n; i++) {
+      const a = P[i], b = P[i + 1];
+      const len = Math.hypot(b.x - a.x, b.y - a.y);
+      const k1 = i === 0 ? Math.min(EDGE_CURVE_MAX, len / 2) : len / 3;
+      const k2 = i === n - 1 ? Math.min(EDGE_CURVE_MAX, len / 2) : len / 3;
+      const c1 = pt(a.x + dir[i][0] * k1, a.y + dir[i][1] * k1);
+      const c2 = pt(b.x - dir[i + 1][0] * k2, b.y - dir[i + 1][1] * k2);
+      const pts = [];
+      for (let k = 0; k <= 16; k++) pts.push(bezierAt(a, c1, c2, b, k / 16));
+      segs.push({ d: `C${fmt(c1.x)},${fmt(c1.y)} ${fmt(c2.x)},${fmt(c2.y)} ${fmt(b.x)},${fmt(b.y)}`, pts, mid: bezierAt(a, c1, c2, b, 0.5) });
+    }
+  }
+  let d = `M${fmt(s.x)},${fmt(s.y)} ${segs.map((g) => g.d).join(' ')}`;
+  if (!ends.from) d = `M${fmt(start.x)},${fmt(start.y)} L${fmt(s.x)},${fmt(s.y)} ${d}`;
+  if (!ends.to) d = `${d} M${fmt(c.x)},${fmt(c.y)} L${fmt(end.x)},${fmt(end.y)}`;
+  const flat = [start];
+  for (const g of segs) for (const p of g.pts) {
+    const prev = flat[flat.length - 1];
+    if (Math.hypot(p.x - prev.x, p.y - prev.y) > 1e-6) flat.push(p);
+  }
+  flat.push(end);
+  return {
+    d,
+    line: flat.map((p) => [fmt(p.x), fmt(p.y)]),
+    mids: segs.map((g) => { const m = g.mid || polylineMiddle(g.pts); return pt(fmt(m.x), fmt(m.y)); }),
+    center: (() => { const m = polylineMiddle(flat); return pt(fmt(m.x), fmt(m.y)); })(),
+    fromDeg, toDeg, start, end,
+  };
+}
+
+// A dragged bend point takes the x or the y of a neighbour ({x, y}) that is within `tolerance`.
+function snapWaypoint(p, neighbors, tolerance) {
+  let x = p.x, y = p.y, bx = tolerance, by = tolerance;
+  for (const n of neighbors) {
+    if (!n) continue;
+    const dx = Math.abs(n.x - p.x), dy = Math.abs(n.y - p.y);
+    if (dx <= bx) { bx = dx; x = n.x; }
+    if (dy <= by) { by = dy; y = n.y; }
+  }
+  return pt(x, y);
+}
+
+function shiftWaypoints(w, dx, dy) { return w.map((p) => [round1(p[0] + dx), round1(p[1] + dy)]); }
+
+// A box { minX, minY, maxX, maxY } grown to take in the bend points.
+function boxWithWaypoints(box, w) {
+  if (!isValidWaypoints(w)) return box;
+  const out = { ...box };
+  for (const [x, y] of w) {
+    if (x < out.minX) out.minX = x;
+    if (y < out.minY) out.minY = y;
+    if (x > out.maxX) out.maxX = x;
+    if (y > out.maxY) out.maxY = y;
+  }
+  return out;
+}
+
+// ---------- marker colours: a palette id or a colour of one's own '#RRGGBB'
+
+const RECENT_COLORS_MAX = 4;
+
+function normalizeHex(v) {
+  if (typeof v !== 'string') return null;
+  const m = v.trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (!m) return null;
+  const h = m[1].length === 3 ? m[1].split('').map((ch) => ch + ch).join('') : m[1];
+  return `#${h.toUpperCase()}`;
+}
+
+function markerColorHex(setting) {
+  const c = MARKER_COLORS.find((x) => x.id === setting);
+  return c ? c.hex : normalizeHex(setting) || MARKER_COLORS[0].hex;
+}
+
+// What the markerColor setting stores for a colour: the palette id when it is a palette colour, else '#RRGGBB'.
+function markerColorSetting(v) {
+  if (MARKER_COLORS.some((x) => x.id === v)) return v;
+  const hex = normalizeHex(v);
+  if (!hex) return null;
+  const c = MARKER_COLORS.find((x) => x.hex.toUpperCase() === hex);
+  return c ? c.id : hex;
+}
+
+// The colours of one's own, newest first, without repeats and without the palette ones.
+function addRecentColor(list, color, max = RECENT_COLORS_MAX) {
+  const isPalette = (h) => MARKER_COLORS.some((x) => x.hex.toUpperCase() === h);
+  const clean = [];
+  for (const v of Array.isArray(list) ? list : []) {
+    const h = normalizeHex(v);
+    if (h && !isPalette(h) && !clean.includes(h)) clean.push(h);
+  }
+  const hex = normalizeHex(color);
+  if (!hex || isPalette(hex)) return clean.slice(0, max);
+  return [hex, ...clean.filter((h) => h !== hex)].slice(0, max);
+}
+
 // ---------- context menu: copy on top, then layers, duplicate, the rest, delete at the bottom (like Holst)
 
 const MENU_ORDER = ['title', 'clipboard', 'gb-clipboard', 'gb-layer', 'gb-edit', 'selection', 'canvas', 'open', 'action-primary', 'action', 'info', 'view', 'system'];
@@ -482,6 +687,8 @@ const logic = {
   minimapFit, zoomPercent, toolByCode, imageFitSize,
   boxesOverlap, layerOrder, styleKindOf, styleSnapshot, styleKey, applyStyle, segmentHitsRect, polylineHitsRect,
   orderMenuSections, menuHotkeys, swapAltCtrl, swapAltCtrlHandlers,
+  isValidWaypoints, sideCenter, edgeRoute, snapWaypoint, shiftWaypoints, boxWithWaypoints, arrowDegrees, BEND_SNAP_PX,
+  normalizeHex, markerColorHex, markerColorSetting, addRecentColor, RECENT_COLORS_MAX,
   STRINGS, setLanguage, t,
 };
 
@@ -495,6 +702,44 @@ function strokeOf(node) {
 function styleOf(node) {
   const d = node && node.unknownData;
   return (d && d.styleAttributes) || {};
+}
+
+function waypointsOf(edge) {
+  const w = edge && edge.unknownData && edge.unknownData.gbWaypoints;
+  return isValidWaypoints(w) ? w : null;
+}
+
+// The route of an arrow through its bend points as it should be drawn now, or null when it has none.
+function edgeBendRoute(edge) {
+  const w = waypointsOf(edge);
+  const from = edge && edge.from, to = edge && edge.to;
+  if (!w || !from || !to || !from.node || !to.node) return null;
+  const method = (edge.unknownData.styleAttributes || {}).pathfindingMethod;
+  return edgeRoute(sideCenter(from.node.getBBox(), from.side), from.side, sideCenter(to.node.getBBox(), to.side), to.side,
+    w, method, { from: from.end === 'arrow', to: to.end === 'arrow' });
+}
+
+// Puts the route through the bend points over the path Canvas (or Advanced Canvas) has just drawn.
+// What the drawn route depends on besides the cards: the points and the line shape.
+const bendKey = (edge) => JSON.stringify([waypointsOf(edge), ((edge.unknownData || {}).styleAttributes || {}).pathfindingMethod || null]);
+
+function drawBends(edge) {
+  const route = edgeBendRoute(edge);
+  const had = !!edge.gbRoute;
+  edge.gbRoute = route;
+  edge.gbDrawn = bendKey(edge);
+  if (!route) {
+    if (had) edge.center = undefined;
+    return;
+  }
+  if (edge.path && edge.path.display && edge.path.interaction) {
+    edge.path.interaction.setAttr('d', route.d);
+    edge.path.display.setAttr('d', route.d);
+  }
+  const turn = (end, p, deg) => { if (end && end.el) end.el.style.transform = `translate(${p.x}px, ${p.y}px) rotate(${deg}deg)`; };
+  turn(edge.fromLineEnd, route.start, route.fromDeg);
+  turn(edge.toLineEnd, route.end, route.toDeg);
+  edge.center = route.center; // Advanced Canvas puts the label here (advanced-canvas:edge-center-requested)
 }
 
 const isEdgeItem = (item) => !!(item && item.from && item.to && !item.nodeEl);
@@ -551,9 +796,11 @@ class Board {
     this.restorers = [];
     this.importing = 0;
     this.styleSnaps = new Map();
+    this.bend = null; // a bend point being dragged
     this.build();
     this.patchHitTest();
     this.patchCanvas();
+    this.plugin.patchEdgeProto(this.canvas.edges && this.canvas.edges.values().next().value);
     this.decorateAll();
     this.snapshotSelection();
     this.addMoreButton();
@@ -609,6 +856,15 @@ class Board {
       this.setTooltip(s, t(`color.${c.id}`));
       s.addEventListener('click', () => this.setSetting('markerColor', c.id));
     }
+    // Second row: colours of one's own (newest first) and "+" with the system colour picker.
+    this.recentSwatches = this.markerPanel.createDiv({ cls: 'gb-swatches gb-recent' });
+    this.addColorButton = createDiv({ cls: 'gb-swatch gb-add-color' });
+    obsidian.setIcon(this.addColorButton, 'plus');
+    this.setTooltip(this.addColorButton, t('marker.addColor'));
+    this.colorInput = this.addColorButton.createEl('input', { cls: 'gb-color-input', attr: { type: 'color', 'aria-label': t('marker.addColor') } });
+    this.colorInput.addEventListener('click', () => { this.colorInput.value = this.markerHex.toLowerCase(); });
+    // The picker is fixed when it is closed (change), not on every hover inside it (input).
+    this.colorInput.addEventListener('change', () => this.pickOwnColor(this.colorInput.value));
 
     this.shapePanel = w.createDiv({ cls: 'gb-ui gb-panel gb-shape-panel' });
     for (const sh of SHAPES) {
@@ -632,6 +888,17 @@ class Board {
     this.minimapEl.addEventListener('pointerdown', (e) => this.onMinimapDown(e));
     this.minimapEl.addEventListener('pointermove', (e) => this.onMinimapMove(e));
     this.minimapEl.addEventListener('pointerup', () => { this.minimapDrag = false; });
+
+    // Handles of the bend points of the selected arrow, in board coordinates (they move and zoom with the board).
+    // The layer keeps the pointer while a handle is dragged, since handles are rebuilt as points are added.
+    this.bendLayer = this.canvas.canvasEl.createDiv({ cls: 'gb-bends' });
+    this.bendLayer.addEventListener('pointerdown', (e) => this.onBendDown(e));
+    this.bendLayer.addEventListener('pointermove', (e) => this.onBendMove(e));
+    this.bendLayer.addEventListener('pointerup', (e) => this.onBendUp(e));
+    this.bendLayer.addEventListener('pointercancel', () => this.cancelBend());
+    this.bendLayer.addEventListener('click', (e) => e.stopPropagation());
+    this.bendLayer.addEventListener('dblclick', (e) => this.onBendDoubleClick(e));
+    this.bendLayer.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); });
 
     // Clicks on our panels must not reach Canvas (it would start a selection box or deselect),
     // nor arrow keys on the slider (Canvas would move the selected cards).
@@ -657,8 +924,10 @@ class Board {
   }
 
   destroy() {
+    this.cancelBend();
     this.destroyed = true;
     this.cancelGesture();
+    if (this.bendLayer) this.bendLayer.remove();
     if (this.frame) window.cancelAnimationFrame(this.frame);
     window.clearTimeout(this.styleTimer);
     for (const restore of this.restorers.splice(0)) restore();
@@ -704,9 +973,9 @@ class Board {
     const w = this.canvas.wrapperEl;
     w.dataset.gbTool = this.tool;
     for (const [id, b] of Object.entries(this.toolButtons)) b.toggleClass('is-active', id === this.tool);
-    const marker = MARKER_COLORS.find((c) => c.id === this.settings.markerColor) || MARKER_COLORS[0];
-    this.toolButtons.marker.style.setProperty('--gb-marker', marker.hex);
-    for (const s of this.markerPanel.querySelectorAll('.gb-swatch')) s.toggleClass('is-active', s.dataset.color === this.settings.markerColor);
+    this.toolButtons.marker.style.setProperty('--gb-marker', this.markerHex);
+    this.syncRecentColors();
+    for (const s of this.markerPanel.querySelectorAll('.gb-swatch[data-color]')) s.toggleClass('is-active', s.dataset.color === this.settings.markerColor);
     this.syncWidth(this.markerSize);
     for (const s of this.shapePanel.querySelectorAll('.gb-shape')) s.toggleClass('is-active', s.dataset.shape === this.settings.shape);
     const shape = SHAPES.find((s) => s.id === this.settings.shape) || SHAPES[0];
@@ -747,7 +1016,29 @@ class Board {
     panel.style.top = `${Math.round(br.top - wr.top + br.height / 2)}px`;
   }
 
-  get markerHex() { return (MARKER_COLORS.find((c) => c.id === this.settings.markerColor) || MARKER_COLORS[0]).hex; }
+  syncRecentColors() {
+    const list = this.settings.markerRecentColors || [];
+    const row = this.recentSwatches;
+    const shown = Array.from(row.querySelectorAll('.gb-swatch[data-color]')).map((s) => s.dataset.color);
+    if (shown.join() === list.join() && this.addColorButton.parentElement === row) return;
+    row.empty();
+    for (const hex of list) {
+      const s = row.createDiv({ cls: 'gb-swatch', attr: { 'data-color': hex } });
+      s.style.setProperty('--gb-swatch', hex);
+      this.setTooltip(s, t('marker.ownColor', { hex }));
+      s.addEventListener('click', () => this.setSetting('markerColor', hex));
+    }
+    row.appendChild(this.addColorButton);
+  }
+
+  async pickOwnColor(value) {
+    const color = markerColorSetting(value);
+    if (!color) return;
+    this.settings.markerRecentColors = addRecentColor(this.settings.markerRecentColors, value);
+    await this.setSetting('markerColor', color);
+  }
+
+  get markerHex() { return markerColorHex(this.settings.markerColor); }
   get markerSize() { return clampMarkerWidth(this.settings.markerWidth); }
   get shape() { return SHAPES.find((s) => s.id === this.settings.shape) || SHAPES[0]; }
 
@@ -1048,12 +1339,41 @@ class Board {
     // Canvas lifts dragged cards to the top for good, so a big background moved once covers the small
     // cards on it: keep every element on its layer. On Windows and Linux Alt+drag leaves the original in
     // place and drags a copy, as in Holst (swapAltCtrl).
-    this.patch(this.canvas, 'handleSelectionDrag', (original) => function (...args) {
+    this.patch(this.canvas, 'handleSelectionDrag', (original, board) => function (...args) {
       const z = new Map();
       for (const n of this.nodes.values()) z.set(n, n.zIndex);
-      const handlers = original.apply(this, args);
+      let handlers = original.apply(this, args);
       for (const [n, v] of z) if (n.zIndex !== v) { n.zIndex = v; n.renderZIndex(); }
+      if (handlers) handlers = board.bendsFollow(handlers);
       return IS_MAC || !handlers ? handlers : swapAltCtrlHandlers(handlers);
+    });
+    // Ctrl+D, paste and Alt+drag copies all go through cloneData(data, offset): their bend points move by the offset.
+    this.patch(this.canvas, 'cloneData', (original) => function (data, offset, ...rest) {
+      const r = original.call(this, data, offset, ...rest);
+      const out = r || data;
+      if (offset && (offset.x || offset.y) && out && Array.isArray(out.edges)) {
+        for (const e of out.edges) if (isValidWaypoints(e.gbWaypoints)) e.gbWaypoints = shiftWaypoints(e.gbWaypoints, offset.x || 0, offset.y || 0);
+      }
+      return r;
+    });
+    // Arrow keys move the selected cards: the bend points between them go along.
+    this.patch(this.canvas, 'nudgeSelection', (original) => function (...args) {
+      const nodes = Array.from(this.selection).filter((n) => n.nodeEl);
+      const ref = nodes[0];
+      const start = ref ? { x: ref.x, y: ref.y } : null;
+      const r = original.apply(this, args);
+      if (!ref || (ref.x === start.x && ref.y === start.y)) return r;
+      const set = new Set(nodes);
+      let changed = false;
+      for (const edge of this.edges.values()) {
+        const w = waypointsOf(edge);
+        if (!w || !set.has(edge.from.node) || !set.has(edge.to.node)) continue;
+        edge.unknownData = { ...edge.unknownData, gbWaypoints: shiftWaypoints(w, ref.x - start.x, ref.y - start.y) };
+        this.markMoved(edge);
+        changed = true;
+      }
+      if (changed) this.requestSave();
+      return r;
     });
     // A selection box also selects the arrows whose line it touches (Canvas selects only cards).
     this.patch(this.canvas, 'handleDragToSelect', (original, board) => function (e, toggle, initial, ...rest) {
@@ -1117,6 +1437,169 @@ class Board {
     }
     cache.set(edge, points);
     return points;
+  }
+
+  // ---------- bend points of the selected arrow (like Miro): drag a middle handle to add one, drag one to move it,
+  // double-click one to remove it
+
+  bendEdge() {
+    if (this.bend) return this.bend.edge;
+    const canvas = this.canvas;
+    if (this.tool !== 'select' || canvas.readonly || canvas.selection.size !== 1) return null;
+    const item = canvas.selection.values().next().value;
+    return isEdgeItem(item) && canvas.edges.get(item.id) === item && item.isAttached !== false ? item : null;
+  }
+
+  syncBends() {
+    const layer = this.bendLayer;
+    if (!layer || this.destroyed) return;
+    const edge = this.bendEdge();
+    layer.gbEdge = edge;
+    if (!edge) { if (layer.childElementCount) layer.empty(); return; }
+    const w = waypointsOf(edge) || [];
+    const route = w.length ? edgeBendRoute(edge) : null;
+    const spots = w.map((p, i) => ({ kind: 'point', index: i, x: p[0], y: p[1] }));
+    const mids = route ? route.mids : [edge.getCenter()];
+    mids.forEach((m, i) => { if (m && Number.isFinite(m.x)) spots.push({ kind: 'mid', index: i, x: m.x, y: m.y }); });
+    const els = Array.from(layer.children);
+    const same = els.length === spots.length && els.every((el, i) => el.dataset.kind === spots[i].kind);
+    if (!same) {
+      layer.empty();
+      for (const s of spots) layer.createDiv({ cls: `gb-bend gb-bend-${s.kind}`, attr: { 'data-kind': s.kind } });
+    }
+    const k = 1 / (this.canvas.scale || 1);
+    Array.from(layer.children).forEach((el, i) => {
+      const s = spots[i];
+      el.dataset.index = String(s.index);
+      el.toggleClass('is-dragging', !!this.bend && this.bend.moved && s.kind === 'point' && s.index === this.bend.index);
+      el.style.transform = `translate(${s.x}px, ${s.y}px) scale(${k})`;
+    });
+  }
+
+  bendHandle(e, kind) {
+    const el = e.target instanceof Element ? e.target.closest('.gb-bend') : null;
+    return el && (!kind || el.dataset.kind === kind) ? el : null;
+  }
+
+  onBendDown(e) {
+    const handle = this.bendHandle(e);
+    if (!handle) return;
+    e.stopPropagation(); // Canvas would start a selection box or deselect the arrow
+    const edge = this.bendLayer.gbEdge;
+    if (e.button !== 0 || !edge || this.bend) return;
+    e.preventDefault();
+    // A second press on the same point soon after the first is a double click: remove the point. (With the pointer
+    // captured by the layer, the dblclick event itself goes to the layer, not to the handle.)
+    const now = Date.now();
+    const last = this.lastBendPress;
+    this.lastBendPress = { edge, kind: handle.dataset.kind, index: handle.dataset.index, time: now };
+    if (last && handle.dataset.kind === 'point' && last.edge === edge && last.kind === 'point' && last.index === handle.dataset.index && now - last.time < 450) {
+      this.lastBendPress = null;
+      this.removeBend(edge, Number(handle.dataset.index));
+      return;
+    }
+    this.bendLayer.setPointerCapture(e.pointerId);
+    this.bend = {
+      edge, pointerId: e.pointerId, kind: handle.dataset.kind, index: Number(handle.dataset.index),
+      startClient: { x: e.clientX, y: e.clientY }, before: waypointsOf(edge), moved: false,
+    };
+  }
+
+  onBendMove(e) {
+    const g = this.bend;
+    if (!g || e.pointerId !== g.pointerId) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (!g.moved && Math.hypot(e.clientX - g.startClient.x, e.clientY - g.startClient.y) <= 3) return;
+    const w = (waypointsOf(g.edge) || []).map((p) => p.slice());
+    if (!g.moved) {
+      g.moved = true;
+      if (g.kind === 'mid') { w.splice(g.index, 0, [0, 0]); g.kind = 'point'; } // a new point on that segment
+    }
+    const edge = g.edge;
+    const start = sideCenter(edge.from.node.getBBox(), edge.from.side);
+    const end = sideCenter(edge.to.node.getBBox(), edge.to.side);
+    const at = (i) => (i < 0 ? start : i >= w.length ? end : pt(w[i][0], w[i][1]));
+    const p = snapWaypoint(this.canvas.posFromEvt(e), [at(g.index - 1), at(g.index + 1)], BEND_SNAP_PX / (this.canvas.scale || 1));
+    w[g.index] = [round1(p.x), round1(p.y)];
+    this.setWaypoints(edge, w);
+  }
+
+  onBendUp(e) {
+    const g = this.bend;
+    if (!g || e.pointerId !== g.pointerId) return;
+    e.preventDefault();
+    e.stopPropagation();
+    this.bend = null;
+    if (g.moved) this.canvas.requestSave(); // one undo step for the whole drag
+    this.requestRender();
+  }
+
+  cancelBend() {
+    const g = this.bend;
+    if (!g) return;
+    this.bend = null;
+    if (g.moved) this.setWaypoints(g.edge, g.before);
+  }
+
+  onBendDoubleClick(e) {
+    e.preventDefault();
+    e.stopPropagation(); // a double click on the board makes a card; the point is removed in onBendDown
+  }
+
+  removeBend(edge, index) {
+    const w = waypointsOf(edge);
+    if (!w) return;
+    this.setWaypoints(edge, w.filter((_, i) => i !== index));
+    this.canvas.requestSave();
+  }
+
+  removeBends(edges) {
+    for (const edge of edges) this.setWaypoints(edge, null);
+    this.canvas.requestSave();
+  }
+
+  // Sets the bend points without the history and saving (a drag would make one undo step per pointer move);
+  // the arrow is redrawn and re-indexed on the next frame.
+  setWaypoints(edge, w) {
+    const data = { ...edge.unknownData };
+    if (w && w.length) data.gbWaypoints = w; else delete data.gbWaypoints;
+    edge.unknownData = data;
+    this.canvas.markMoved(edge);
+    this.canvas.markDirty(edge);
+    this.requestRender();
+  }
+
+  // Cards dragged together carry the bend points of the arrows between them (Canvas moves only the cards).
+  // The first moved card is the reference: copies (Alt) and snapping move it like the rest.
+  bendsFollow(handlers) {
+    const canvas = this.canvas;
+    const moved = new Set();
+    for (const n of canvas.selection) {
+      if (!n.nodeEl) continue;
+      moved.add(n);
+      if (isGroupNode(n)) for (const c of canvas.getContainingNodes(n.getBBox())) moved.add(c);
+    }
+    const edges = [];
+    for (const edge of canvas.edges.values()) {
+      const w = waypointsOf(edge);
+      if (w && moved.has(edge.from.node) && moved.has(edge.to.node)) edges.push({ edge, w });
+    }
+    const ref = moved.values().next().value;
+    if (!edges.length || !ref) return handlers;
+    const start = { x: ref.x, y: ref.y };
+    const put = (dx, dy) => {
+      for (const { edge, w } of edges) {
+        edge.unknownData = { ...edge.unknownData, gbWaypoints: dx || dy ? shiftWaypoints(w, dx, dy) : w };
+        canvas.markMoved(edge);
+      }
+    };
+    const call = (fn, args) => (typeof fn === 'function' ? fn(...args) : undefined);
+    return {
+      ...handlers,
+      move: (...a) => { const r = call(handlers.move, a); put(ref.x - start.x, ref.y - start.y); return r; },
+      cancel: (...a) => { const r = call(handlers.cancel, a); put(0, 0); return r; },
+    };
   }
 
   // ---------- layers and duplicates
@@ -1268,6 +1751,8 @@ class Board {
       add('gb-layer', t('menu.back'), 'send-to-back', '[', () => this.moveLayer('back'));
     }
     if (!canvas.readonly && nodes.length) add('gb-edit', t('menu.duplicate'), 'lucide-files', `${MOD_LABEL}+D`, () => this.duplicateSelection());
+    const bent = Array.from(canvas.selection).filter((x) => isEdgeItem(x) && waypointsOf(x));
+    if (!canvas.readonly && bent.length) add('gb-edit', t('menu.removeBends'), pickIcon(['spline', 'route', 'waypoints']), '', () => this.removeBends(bent));
     // Other plugins may still add items: order the sections and label the hotkeys when the menu opens.
     const sort = menu.sort;
     if (typeof sort !== 'function') return;
@@ -1323,6 +1808,7 @@ class Board {
     this.frame = window.requestAnimationFrame(() => {
       this.frame = 0;
       if (this.dirty) this.renderNav();
+      this.syncBends();
       // Canvas animates zoom and pan towards tZoom/tx/ty without new events: follow until it settles.
       const c = this.canvas;
       if (Math.abs(c.zoom - c.tZoom) > 1e-4 || Math.abs(c.x - c.tx) > 0.01 || Math.abs(c.y - c.ty) > 0.01) this.requestRender();
@@ -1425,6 +1911,8 @@ class CultCanvasPlugin extends obsidian.Plugin {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
     delete this.settings.markerSize; // the thin / thick buttons before the width slider
     this.settings.markerWidth = clampMarkerWidth(this.settings.markerWidth);
+    this.settings.markerColor = markerColorSetting(this.settings.markerColor) || DEFAULT_SETTINGS.markerColor;
+    this.settings.markerRecentColors = addRecentColor(this.settings.markerRecentColors, null);
     this.settings.styleDefaults = { ...(this.settings.styleDefaults || {}) };
     if (!STRINGS[this.settings.language]) this.settings.language = DEFAULT_SETTINGS.language;
     setLanguage(this.settings.language);
@@ -1443,7 +1931,8 @@ class CultCanvasPlugin extends obsidian.Plugin {
       if (node && node.isEditing) void this.styleEditor(node);
       if (board(canvas)) board(canvas).scheduleStyleCheck();
     });
-    on('advanced-canvas:edge-changed', (canvas) => { if (board(canvas)) board(canvas).scheduleStyleCheck(); });
+    on('advanced-canvas:edge-changed', (canvas, edge) => this.onEdgeChanged(canvas, edge));
+    on('advanced-canvas:edge-added', (canvas, edge) => this.patchEdgeProto(edge));
     on('advanced-canvas:node-added', (canvas, node) => { if (board(canvas)) this.decorate(node); });
     // New elements get the last style of their kind once their creator has finished filling them in.
     on('advanced-canvas:node-created', (canvas, node) => {
@@ -1472,7 +1961,7 @@ class CultCanvasPlugin extends obsidian.Plugin {
     on('advanced-canvas:node-interaction', (canvas) => this.syncInteractionLayer(canvas));
     on('advanced-canvas:selection-changed', (canvas) => {
       this.syncInteractionLayer(canvas);
-      if (board(canvas)) board(canvas).onSelectionChanged();
+      if (board(canvas)) { board(canvas).onSelectionChanged(); board(canvas).requestRender(); }
     });
     on('advanced-canvas:double-click', (canvas, _e, preventDefault) => {
       const b = this.boards.get(canvas);
@@ -1538,6 +2027,7 @@ class CultCanvasPlugin extends obsidian.Plugin {
     for (const b of this.boards.values()) b.destroy();
     this.boards.clear();
     this.unpatchNodeZ();
+    this.unpatchEdgeProto();
     for (const [doc, faces] of this.fontDocs) for (const face of faces) doc.fonts.delete(face);
     this.fontDocs.clear();
     if (this.saveTimer) { window.clearTimeout(this.saveTimer); void this.saveSettings(); }
@@ -1578,6 +2068,82 @@ class CultCanvasPlugin extends obsidian.Plugin {
     node.renderZIndex = mine;
     node.gbZ = { prev, own, mine };
     mine.call(node);
+  }
+
+  // Bend points (gbWaypoints) are drawn by the arrow class itself, so every way Canvas and Advanced Canvas redraw an
+  // arrow (moves, styles, undo, the label) goes through the route: updatePath draws it, getCenter and getBBox follow
+  // it. A setData that changes the points or the line shape is caught in onEdgeChanged: Advanced Canvas wraps setData
+  // on each arrow with the function it had when created, so a prototype wrap of setData would be skipped.
+  // All arrows share one prototype; it is wrapped once, by the first arrow seen, and given back on unload.
+  patchEdgeProto(edge) {
+    if (this.edgeProto || this.unloaded || !edge) return;
+    const proto = Object.getPrototypeOf(edge);
+    if (!proto || typeof proto.updatePath !== 'function' || typeof proto.getBBox !== 'function') return;
+    this.edgeProto = proto;
+    this.edgeRestorers = [];
+    const off = () => this.unloaded;
+    const wrap = (name, make) => {
+      const original = proto[name];
+      if (typeof original !== 'function') return;
+      const own = Object.prototype.hasOwnProperty.call(proto, name);
+      const patched = make(original);
+      const wrapper = function (...args) { return off() ? original.apply(this, args) : patched.apply(this, args); };
+      proto[name] = wrapper;
+      this.edgeRestorers.push(() => {
+        if (proto[name] !== wrapper) return; // wrapped again by someone else: ours stays and calls the original
+        if (own) proto[name] = original; else delete proto[name];
+      });
+    };
+    wrap('updatePath', (original) => function (...args) {
+      const r = original.apply(this, args);
+      drawBends(this);
+      return r;
+    });
+    wrap('getCenter', (original) => function (...args) {
+      return this.gbRoute && waypointsOf(this) ? { x: this.gbRoute.center.x, y: this.gbRoute.center.y } : original.apply(this, args);
+    });
+    wrap('getBBox', (original) => function (...args) { return boxWithWaypoints(original.apply(this, args), waypointsOf(this)); });
+    this.refreshBentEdges();
+  }
+
+  unpatchEdgeProto() {
+    for (const restore of (this.edgeRestorers || []).splice(0)) restore();
+    this.edgeProto = null;
+    this.refreshBentEdges();
+  }
+
+  // Redraws (and re-indexes) every arrow with bend points: after the prototype is wrapped or given back.
+  refreshBentEdges() {
+    for (const leaf of this.app.workspace.getLeavesOfType('canvas')) {
+      const canvas = leaf.view && leaf.view.canvas;
+      if (!canvas || !canvas.edges) continue;
+      for (const edge of canvas.edges.values()) {
+        if (!waypointsOf(edge) && !edge.gbRoute) continue;
+        if (this.unloaded) { edge.gbRoute = null; edge.center = undefined; }
+        canvas.markMoved(edge);
+        canvas.markDirty(edge);
+      }
+    }
+  }
+
+  // Advanced Canvas redraws an arrow with a pathfinding method after updatePath, over the route: draw it again.
+  onEdgeChanged(canvas, edge) {
+    this.patchEdgeProto(edge);
+    const b = this.boards.get(canvas);
+    if (b) { b.scheduleStyleCheck(); b.requestRender(); }
+    // Canvas and Advanced Canvas redraw only a dirty or selected arrow; undo or a script changing the points or the
+    // line shape of another one would leave the old route on screen.
+    if ((waypointsOf(edge) || edge.gbRoute) && edge.gbDrawn !== bendKey(edge) && canvas && !canvas.dirty.has(edge)) {
+      canvas.markMoved(edge); // its box (the edge index) changed with the points
+      canvas.markDirty(edge);
+      return;
+    }
+    if (!waypointsOf(edge) || !(edge.unknownData.styleAttributes || {}).pathfindingMethod) return;
+    queueMicrotask(() => {
+      if (this.unloaded || !waypointsOf(edge)) return;
+      drawBends(edge);
+      if (edge.labelElement) edge.labelElement.render();
+    });
   }
 
   unpatchNodeZ() {
@@ -1782,6 +2348,7 @@ class CultCanvasPlugin extends obsidian.Plugin {
     }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.code === 'Escape') {
+      if (b.bend) { b.cancelBend(); e.preventDefault(); e.stopPropagation(); return; }
       if (b.gesture || b.tool !== 'select') { b.setTool('select'); e.preventDefault(); e.stopPropagation(); }
       return;
     }

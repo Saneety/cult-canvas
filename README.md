@@ -12,7 +12,8 @@
 
 - **A toolbar with one-key tools**: Select `V`, Hand `H`, Sticky note `S`, Text `T`, Shape `R`, Marker `P`, Eraser `E`, Frame `F`, Image or note `I`.
 - **Click to place, type right away**: sticky notes, borderless text and seven shapes (rectangle, oval, diamond, circle, parallelogram, document, database).
-- **A freehand marker** in five colors, 1 to 30 px wide, to circle, underline and point. The eraser removes whole lines.
+- **Bend points on arrows**, as in Miro: drag the handle in the middle of a selected arrow to route it around cards.
+- **A freehand marker** in five colors plus your own, 1 to 30 px wide, to circle, underline and point. The eraser removes whole lines.
 - **Frames** with titles split the board into parts.
 - **Copies and layers**: Alt+drag leaves the original and moves a copy, Ctrl+D duplicates, `]` and `[` bring to front and send to back.
 - **A right-click menu** with copy, layers, duplicate and delete, shortcuts shown.

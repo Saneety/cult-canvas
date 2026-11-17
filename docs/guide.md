@@ -39,7 +39,7 @@ The toolbar is on the left of every canvas. Hotkeys work while the cursor is not
 | S | Sticky note | click for a 220x220 note, drag for your own size; typing starts at once |
 | T | Text | text without a border |
 | R | Shape | rectangle, oval, diamond, circle, parallelogram, document, database (pick it in the panel) |
-| P | Marker | freehand lines; the panel has a width slider (1-30 px) and 5 colors; a line keeps one width along its length however fast you move |
+| P | Marker | freehand lines; the panel has a width slider (1-30 px), 5 colors and your own colors; a line keeps one width along its length however fast you move |
 | E | Eraser | erases the marker lines you drag over |
 | F | Frame | a section with a title (a Canvas group) |
 | I | Insert | an image from your computer, an image or a note from the vault |
@@ -47,6 +47,9 @@ The toolbar is on the left of every canvas. Hotkeys work while the cursor is not
 | Space | | hold and drag to pan with any tool |
 
 Sticky note, Text, Shape and Frame place one element and go back to Select, so you can move it right away.
+
+Your own marker color: press "+" in the second row of the marker panel and pick a color. The last 4 colors
+you picked stay in that row, newest first.
 
 ## Zoom, grid and minimap
 
@@ -93,6 +96,18 @@ diamond stays a diamond. Entering edit mode does not flicker.
 
 Arrows are drawn from the dots on the edges of a card; double-click an arrow to label it.
 
+## Bend points on arrows
+
+Select one arrow with the Select tool: a blue handle shows in the middle of each of its segments. Drag a
+handle to add a bend point there and route the arrow around other cards. A bend point can be dragged; near
+the line of its neighbour it snaps level or straight. Double-click a point to remove it; "Remove bend points"
+in the context menu removes them all.
+
+The arrow keeps its line shape from the Advanced Canvas popup: a curve goes smoothly through the points,
+"direct" is a broken line, "square" makes right angles and enters the card straight. When you move both cards
+of an arrow (dragging, arrow keys), its points move with them; copies, Ctrl+D and paste keep them too. Each
+drag is one Ctrl+Z step.
+
 ## Card popup
 
 A selected card has the Advanced Canvas buttons above it and two of Cult Canvas:
@@ -133,7 +148,8 @@ edit of the file on disk even while the board is open. New ids are 16 hex charac
 | Color | `"color":"1"`...`"6"` (the Obsidian palette) or `"#RRGGBB"` |
 
 An arrow: `{"id","fromNode","fromSide","toNode","toSide","label":"needs"}`, sides are `top`, `right`,
-`bottom`, `left`.
+`bottom`, `left`. Bend points: `"gbWaypoints":[[250,250],[550,250]]`, the points in board coordinates from the
+start of the arrow to its end.
 
 A marker line is a text node with empty text:
 
@@ -144,7 +160,7 @@ A marker line is a text node with empty text:
 
 `points` are the points of the line from the node's top left corner, `size` is the width in pixels (the
 slider gives 1-30), `w` and `h` are the node size when the line was drawn (stretch the node and the line
-stretches with it). Marker colors: `#FF5A3D`, `#EDEDED`, `#FFD54A`, `#5DB2FF`, `#7CE8A6`. Without the plugin
+stretches with it). Marker colors: `#FF5A3D`, `#EDEDED`, `#FFD54A`, `#5DB2FF`, `#7CE8A6`, or any `#RRGGBB`. Without the plugin
 such a node shows as an empty card.
 
 The `gb` prefix of these fields and of the CSS classes comes from the plugin's working name; boards already

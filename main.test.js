@@ -16,6 +16,8 @@ const {
   strokeOutlinePoints, strokeOutlinePath, centerlinePath, dragRect, centeredRect, unionBounds, minimapFit, zoomPercent, toolByCode, imageFitSize,
   boxesOverlap, layerOrder, styleKindOf, styleSnapshot, styleKey, applyStyle, segmentHitsRect, polylineHitsRect,
   orderMenuSections, menuHotkeys, swapAltCtrl, swapAltCtrlHandlers,
+  isValidWaypoints, sideCenter, edgeRoute, snapWaypoint, shiftWaypoints, boxWithWaypoints, arrowDegrees,
+  normalizeHex, markerColorHex, markerColorSetting, addRecentColor, RECENT_COLORS_MAX,
   STRINGS, setLanguage, t,
 } = logic;
 
@@ -291,6 +293,134 @@ test('found in live tests: a new arrow is redrawn with its style, menu copy focu
   assert.ok(/applyDefaultStyle\(item\)[\s\S]*?item\.setData\(next\);[\s\S]{0,200}markDirty\(item\)/.test(src), 'markDirty after setData');
   // core Canvas copies only while its wrapper has focus; the menu takes the focus away
   assert.ok(/copySelection\(\)\s*\{[\s\S]{0,200}wrapperEl\.focus\(\)[\s\S]{0,300}\.copy\(\)/.test(src), 'focus before copy');
+});
+
+// ---------- bend points of arrows
+
+const box = (x, y, w, h) => ({ minX: x, minY: y, maxX: x + w, maxY: y + h });
+const parsePath = (d) => [...d.matchAll(/([MLC])([^MLC]*)/g)].map((m) => [m[1], m[2].trim().split(/[\s,]+/).filter(Boolean).map(Number)]);
+
+test('bend points: only a non-empty list of finite [x, y] counts', () => {
+  assert.ok(isValidWaypoints([[1, 2]]));
+  assert.ok(isValidWaypoints([[1, 2], [3.5, -4]]));
+  for (const bad of [undefined, null, [], [[1]], [[1, NaN]], [['1', 2]], 'x', [[1, 2], null]]) assert.ok(!isValidWaypoints(bad), JSON.stringify(bad));
+});
+
+test('side centres are where Canvas attaches arrows', () => {
+  const b = box(0, 0, 100, 40);
+  assert.deepStrictEqual(sideCenter(b, 'top'), { x: 50, y: 0 });
+  assert.deepStrictEqual(sideCenter(b, 'right'), { x: 100, y: 20 });
+  assert.deepStrictEqual(sideCenter(b, 'bottom'), { x: 50, y: 40 });
+  assert.deepStrictEqual(sideCenter(b, 'left'), { x: 0, y: 20 });
+});
+
+test('arrowheads turn like the Canvas ones: into a bottom side 0, top 180, left 90, right 270', () => {
+  assert.strictEqual(arrowDegrees({ x: 0, y: 10 }, { x: 0, y: 0 }), 0); // going up, into a bottom side
+  assert.strictEqual(arrowDegrees({ x: 0, y: 0 }, { x: 0, y: 10 }), 180);
+  assert.strictEqual(arrowDegrees({ x: 0, y: 0 }, { x: 10, y: 0 }), 90); // going right, into a left side
+  assert.strictEqual(arrowDegrees({ x: 10, y: 0 }, { x: 0, y: 0 }), 270);
+  assert.strictEqual(arrowDegrees({ x: 0, y: 0 }, { x: 10, y: 10 }), 135);
+});
+
+test('direct route: straight segments through the bend points, arrowhead along the last one', () => {
+  const r = edgeRoute({ x: 0, y: 0 }, 'right', { x: 200, y: 100 }, 'left', [[100, 0], [100, 100]], 'direct');
+  const cmds = parsePath(r.d);
+  assert.deepStrictEqual(cmds.map((c) => c[0]).join(''), 'MLMLLL', 'stub to the card at the start (no arrowhead), then the segments');
+  assert.deepStrictEqual(cmds[0][1], [0, 0], 'the line reaches the card where there is no arrowhead');
+  assert.deepStrictEqual(cmds[cmds.length - 1][1], [193, 100], 'the line stops under the arrowhead');
+  assert.strictEqual(r.toDeg, 90);
+  assert.strictEqual(r.mids.length, 3);
+  assert.deepStrictEqual(r.mids[1], { x: 100, y: 50 });
+  assert.deepStrictEqual(r.line[0], [0, 0]);
+  assert.deepStrictEqual(r.line[r.line.length - 1], [200, 100]);
+  // a slanted last segment turns the arrowhead with it
+  const s = edgeRoute({ x: 0, y: 0 }, 'right', { x: 100, y: 100 }, 'top', [[0, 0.0001 + 50]], 'direct');
+  assert.ok(Math.abs(s.toDeg - arrowDegrees({ x: 0, y: 50 }, { x: 100, y: 100 })) < 0.01);
+});
+
+test('square route: right angles only, leaving and entering square to the sides', () => {
+  const r = edgeRoute({ x: 0, y: 0 }, 'right', { x: 300, y: 200 }, 'top', [[150, 80]], 'square', { from: false, to: true });
+  const pts = r.line;
+  for (let i = 1; i < pts.length; i++) {
+    const dx = pts[i][0] - pts[i - 1][0], dy = pts[i][1] - pts[i - 1][1];
+    assert.ok(Math.abs(dx) < 1e-6 || Math.abs(dy) < 1e-6, `segment ${i} is horizontal or vertical`);
+  }
+  assert.ok(pts.some((p) => p[0] === 150 && p[1] === 80), 'passes the bend point');
+  assert.strictEqual(pts[1][1], 0, 'leaves the right side horizontally');
+  const a = pts[pts.length - 2], b = pts[pts.length - 1];
+  assert.ok(a[0] === b[0] && a[1] < b[1], 'enters the top side going down');
+  assert.strictEqual(r.toDeg, 180);
+  assert.strictEqual(r.mids.length, 2);
+});
+
+test('curve route: passes through the bend points and leaves the sides square, like a Canvas arrow', () => {
+  const r = edgeRoute({ x: 0, y: 0 }, 'right', { x: 400, y: 0 }, 'left', [[200, -150]], 'bezier', { from: false, to: false });
+  const cmds = parsePath(r.d);
+  const curves = cmds.filter((c) => c[0] === 'C');
+  assert.strictEqual(curves.length, 2);
+  assert.deepStrictEqual(curves[0][1].slice(4), [200, -150], 'the first curve ends on the bend point');
+  const first = cmds.find((c, i) => c[0] === 'M' && cmds[i + 1] && cmds[i + 1][0] === 'C')[1];
+  assert.strictEqual(curves[0][1][1], first[1], 'the first control point is level with the start: leaves the right side square');
+  assert.ok(curves[0][1][0] > first[0], 'and goes right');
+  assert.strictEqual(curves[1][1][5], 0, 'the last curve ends level with the end');
+  assert.ok(curves[1][1][2] < 393 && curves[1][1][3] === 0, 'the last control point comes in from the left');
+  // the tangent at the bend point is shared by both curves (smooth)
+  const inDir = [200 - curves[0][1][2], -150 - curves[0][1][3]], outDir = [curves[1][1][0] - 200, curves[1][1][1] + 150];
+  assert.ok(Math.abs(inDir[0] * outDir[1] - inDir[1] * outDir[0]) < 1e-3, 'no corner at the bend point');
+  assert.ok(Math.abs(r.center.x - 200) < 2 && r.center.y < -140, 'a symmetric route has its middle at the bend point');
+  assert.ok(r.mids[0].x < 200 && r.mids[1].x > 200);
+});
+
+test('a dragged bend point lines up with a neighbour within the snap distance', () => {
+  const n = [{ x: 100, y: 0 }, { x: 300, y: 205 }];
+  assert.deepStrictEqual(snapWaypoint({ x: 104, y: 199 }, n, 8), { x: 100, y: 205 });
+  assert.deepStrictEqual(snapWaypoint({ x: 150, y: 150 }, n, 8), { x: 150, y: 150 });
+  assert.deepStrictEqual(snapWaypoint({ x: 109, y: 50 }, n, 8), { x: 109, y: 50 });
+  assert.deepStrictEqual(snapWaypoint({ x: 301, y: 3 }, n, 8), { x: 300, y: 0 }, 'the closest neighbour wins on each axis');
+});
+
+test('bend points move with their cards and grow the arrow box', () => {
+  assert.deepStrictEqual(shiftWaypoints([[1, 2], [10.25, -3]], 20, 20), [[21, 22], [30.3, 17]]);
+  const b = { minX: 0, minY: 0, maxX: 10, maxY: 10 };
+  assert.deepStrictEqual(boxWithWaypoints(b, [[-5, 3], [4, 40]]), { minX: -5, minY: 0, maxX: 10, maxY: 40 });
+  assert.strictEqual(boxWithWaypoints(b, undefined), b);
+});
+
+test('the plugin draws bend points on the arrow prototype and gives them back on unload', () => {
+  const src = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
+  for (const name of ['updatePath', 'getCenter', 'getBBox']) assert.ok(src.includes(`wrap('${name}'`), `wraps ${name}`);
+  // Advanced Canvas wraps setData per arrow with the function it had when created, so a prototype wrap of setData is
+  // skipped: a changed route of a non-selected arrow (undo, a script) is caught on its edge-changed event instead
+  assert.ok(!src.includes("wrap('setData'"), 'no prototype wrap of setData');
+  assert.ok(/onEdgeChanged\(canvas, edge\)\s*\{[\s\S]{0,700}gbDrawn !== bendKey\(edge\)[\s\S]{0,300}markDirty\(edge\)/.test(src), 'a changed route is redrawn');
+  assert.ok(/unpatchEdgeProto\(\)/.test(src) && /onunload\(\)\s*\{[\s\S]{0,400}unpatchEdgeProto\(\)/.test(src), 'restored on unload');
+  assert.ok(/'cloneData'/.test(src), 'copies shift their bend points');
+  // Canvas.requestSave() pushes the history: a drag saves once, at the end, so it is one undo step
+  assert.ok(/onBendUp\(e\)\s*\{[\s\S]{0,300}requestSave\(\)/.test(src) && !/onBendMove\(e\)\s*\{[^}]*requestSave/.test(src), 'a drag is one undo step');
+});
+
+// ---------- marker colours of one's own
+
+test('marker colour: a palette id or #RRGGBB, anything else falls back to red', () => {
+  assert.strictEqual(normalizeHex('#abc'), '#AABBCC');
+  assert.strictEqual(normalizeHex(' #12ab9f '), '#12AB9F');
+  for (const bad of ['', '#12345', 'red', 'bad', '12ab9f', null, 5, '#GGGGGG']) assert.strictEqual(normalizeHex(bad), null, String(bad));
+  assert.strictEqual(markerColorHex('blue'), '#5DB2FF');
+  assert.strictEqual(markerColorHex('#a1b2c3'), '#A1B2C3');
+  assert.strictEqual(markerColorHex('nonsense'), MARKER_COLORS[0].hex);
+  assert.strictEqual(markerColorSetting('green'), 'green');
+  assert.strictEqual(markerColorSetting('#ff5a3d'), 'red', 'a palette colour is stored by its id');
+  assert.strictEqual(markerColorSetting('#123456'), '#123456');
+  assert.strictEqual(markerColorSetting('nope'), null);
+});
+
+test('own colours: newest first, no repeats, no palette colours, four at most', () => {
+  assert.deepStrictEqual(addRecentColor([], '#123456'), ['#123456']);
+  assert.deepStrictEqual(addRecentColor(['#111111', '#222222'], '#222222'), ['#222222', '#111111']);
+  assert.deepStrictEqual(addRecentColor(['#111111'], '#FF5A3D'), ['#111111'], 'a palette colour is not added');
+  assert.deepStrictEqual(addRecentColor(['#111111', '#222222', '#333333', '#444444'], '#555555'), ['#555555', '#111111', '#222222', '#333333']);
+  assert.deepStrictEqual(addRecentColor(['bad', '#abc', '#AABBCC', '#5DB2FF'], null), ['#AABBCC'], 'a stored list is cleaned');
+  assert.strictEqual(RECENT_COLORS_MAX, 4);
 });
 
 test('main.js carries the vendored perfect-freehand', () => {
