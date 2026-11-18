@@ -21,8 +21,9 @@ Everything the plugin does, in detail. The short version is in the [README](../R
 
 - **[Advanced Canvas](https://github.com/Developer-Mike/obsidian-advanced-canvas)** (community plugin
   `advanced-canvas`, tested with 7.1.2). It provides the shapes, card styles and canvas events Cult Canvas
-  builds on. Without it marker lines, sticky notes and text sizes disappear after undo or reload, and the
-  plugin shows a notice.
+  builds on. Without it the toolbar still shows, but bend points on arrows, shapes, sticky notes, marker lines
+  and text sizes do not work. While it is missing or turned off, a hint on top of every board says so, and its
+  button installs or enables the plugin.
 - Obsidian on desktop (Windows, macOS, Linux). The plugin is desktop only: copying uses the desktop
   clipboard.
 

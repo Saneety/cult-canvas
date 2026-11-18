@@ -122,7 +122,10 @@ const STRINGS = {
     'command.tool': 'Tool: {tool}', 'command.grid': 'Toggle snap to grid',
     'notice.failed': 'Cult Canvas: that did not work, details are in the developer console.',
     'notice.imageFailed': 'Cult Canvas: could not add {name}.',
-    'notice.needsAdvancedCanvas': 'Cult Canvas needs the Advanced Canvas plugin: without it marker lines, sticky notes and text sizes disappear after undo or reload.',
+    'ac.title': 'Cult Canvas needs the Advanced Canvas plugin', 'ac.install': 'Install Advanced Canvas', 'ac.enable': 'Enable Advanced Canvas',
+    'ac.text': 'Advanced Canvas is not installed. Without it bend points on arrows, shapes, sticky notes, marker lines and text sizes do not work.',
+    'ac.textOff': 'Advanced Canvas is turned off. Without it bend points on arrows, shapes, sticky notes, marker lines and text sizes do not work.',
+    'ac.close': 'Hide until Obsidian restarts',
     'settings.language': 'Language', 'settings.languageDesc': 'Language of the board tools, menus and commands.',
   },
   ru: {
@@ -144,7 +147,10 @@ const STRINGS = {
     'command.tool': 'Инструмент: {tool}', 'command.grid': 'Привязка к сетке: вкл/выкл',
     'notice.failed': 'Cult Canvas: не получилось, подробности в консоли разработчика.',
     'notice.imageFailed': 'Cult Canvas: не удалось добавить {name}.',
-    'notice.needsAdvancedCanvas': 'Cult Canvas нужен плагин Advanced Canvas: без него маркер, стикеры и размеры текста пропадают после отмены и перезагрузки.',
+    'ac.title': 'Cult Canvas нужен плагин Advanced Canvas', 'ac.install': 'Установить Advanced Canvas', 'ac.enable': 'Включить Advanced Canvas',
+    'ac.text': 'Advanced Canvas не установлен. Без него не работают узлы на стрелках, фигуры, стикеры, линии маркера и размеры текста.',
+    'ac.textOff': 'Advanced Canvas выключен. Без него не работают узлы на стрелках, фигуры, стикеры, линии маркера и размеры текста.',
+    'ac.close': 'Скрыть до перезапуска Obsidian',
     'settings.language': 'Язык', 'settings.languageDesc': 'Язык панелей доски, меню и команд.',
   },
 };
@@ -680,8 +686,17 @@ function swapAltCtrlHandlers(handlers) {
   return out;
 }
 
+// The plugin everything here stands on: 'ok' (enabled), 'off' (installed, turned off) or 'missing'.
+const ADVANCED_CANVAS_ID = 'advanced-canvas';
+function advancedCanvasState(plugins) {
+  if (plugins && plugins.enabledPlugins && plugins.enabledPlugins.has(ADVANCED_CANVAS_ID)) return 'ok';
+  return plugins && plugins.manifests && plugins.manifests[ADVANCED_CANVAS_ID] ? 'off' : 'missing';
+}
+
+const advancedCanvasPageUrl = (vault) => `obsidian://show-plugin?vault=${encodeURIComponent(vault)}&id=${ADVANCED_CANVAS_ID}`;
+
 const logic = {
-  MARKER_COLORS, MARKER_WIDTH, TOOLS, SHAPES, OVERLAY_TOOLS, ONE_SHOT_TOOLS, clampMarkerWidth,
+  advancedCanvasState, advancedCanvasPageUrl, MARKER_COLORS, MARKER_WIDTH, TOOLS, SHAPES, OVERLAY_TOOLS, ONE_SHOT_TOOLS, clampMarkerWidth,
   dedupePoints, buildStrokeNode, isValidStroke, distToSegment, strokeDistance, strokeHit, samplePath,
   getSvgPathFromStroke, strokeOutlinePoints, strokeOutlinePath, centerlinePath, dragRect, centeredRect, unionBounds,
   minimapFit, zoomPercent, toolByCode, imageFitSize,
@@ -804,7 +819,18 @@ class Board {
     this.decorateAll();
     this.snapshotSelection();
     this.addMoreButton();
+    this.syncAdvancedCanvasHint();
     this.requestRender();
+  }
+
+  syncAdvancedCanvasHint() {
+    const state = this.plugin.acHintClosed ? 'ok' : advancedCanvasState(this.app.plugins);
+    if (state === this.acHintState) return;
+    this.acHintState = state;
+    this.acHintEl.toggleClass('is-open', state !== 'ok');
+    if (state === 'ok') return;
+    this.acHintText.setText(t(state === 'off' ? 'ac.textOff' : 'ac.text'));
+    this.acHintButton.setText(t(state === 'off' ? 'ac.enable' : 'ac.install'));
   }
 
   get settings() { return this.plugin.settings; }
@@ -900,9 +926,21 @@ class Board {
     this.bendLayer.addEventListener('dblclick', (e) => this.onBendDoubleClick(e));
     this.bendLayer.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); });
 
+    // Shown only while Advanced Canvas is missing or turned off (syncAdvancedCanvasHint).
+    this.acHintEl = w.createDiv({ cls: 'gb-ui gb-ac-hint' });
+    const acBody = this.acHintEl.createDiv({ cls: 'gb-ac-body' });
+    acBody.createDiv({ cls: 'gb-ac-title', text: t('ac.title') });
+    this.acHintText = acBody.createDiv({ cls: 'gb-ac-text' });
+    this.acHintButton = this.acHintEl.createEl('button', { cls: 'mod-cta gb-ac-action' });
+    this.acHintButton.addEventListener('click', () => void this.plugin.fixAdvancedCanvas());
+    const acClose = this.acHintEl.createDiv({ cls: 'gb-ac-close' });
+    obsidian.setIcon(acClose, 'x');
+    this.setTooltip(acClose, t('ac.close'));
+    acClose.addEventListener('click', () => this.plugin.closeAdvancedCanvasHint());
+
     // Clicks on our panels must not reach Canvas (it would start a selection box or deselect),
     // nor arrow keys on the slider (Canvas would move the selected cards).
-    for (const el of [this.toolbarEl, this.markerPanel, this.shapePanel, this.navEl]) {
+    for (const el of [this.toolbarEl, this.markerPanel, this.shapePanel, this.navEl, this.acHintEl]) {
       el.addEventListener('pointerdown', (e) => e.stopPropagation());
       el.addEventListener('dblclick', (e) => e.stopPropagation());
       el.addEventListener('keydown', (e) => e.stopPropagation());
@@ -933,7 +971,7 @@ class Board {
     for (const restore of this.restorers.splice(0)) restore();
     const more = this.canvas.menu && this.canvas.menu.menuEl && this.canvas.menu.menuEl.querySelector('.gb-more');
     if (more) more.remove();
-    for (const el of [this.overlayEl, this.toolbarEl, this.markerPanel, this.shapePanel, this.navEl]) el && el.remove();
+    for (const el of [this.overlayEl, this.toolbarEl, this.markerPanel, this.shapePanel, this.navEl, this.acHintEl]) el && el.remove();
     const w = this.canvas.wrapperEl;
     w.removeClass('gb-board', 'gb-space');
     delete w.dataset.gbTool;
@@ -1976,12 +2014,27 @@ class CultCanvasPlugin extends obsidian.Plugin {
 
     this.registerCommands();
 
-    this.app.workspace.onLayoutReady(() => {
-      this.attachAll();
-      if (!this.app.plugins || !this.app.plugins.enabledPlugins || !this.app.plugins.enabledPlugins.has('advanced-canvas')) {
-        new obsidian.Notice(t('notice.needsAdvancedCanvas'), 12000);
-      }
-    });
+    this.app.workspace.onLayoutReady(() => this.attachAll());
+    // Obsidian has no event for a plugin being installed or enabled: the hint on the boards looks by itself.
+    this.registerInterval(window.setInterval(() => this.syncAdvancedCanvasHints(), 2000));
+  }
+
+  syncAdvancedCanvasHints() { for (const b of this.boards.values()) b.syncAdvancedCanvasHint(); }
+
+  closeAdvancedCanvasHint() {
+    this.acHintClosed = true; // for this run of Obsidian: the next start reminds again
+    this.syncAdvancedCanvasHints();
+  }
+
+  // The button of the hint: turn the plugin on, or open its page in the community plugins.
+  async fixAdvancedCanvas() {
+    if (advancedCanvasState(this.app.plugins) === 'off') {
+      try { await this.app.plugins.enablePluginAndSave(ADVANCED_CANVAS_ID); } catch (e) { console.error('Cult Canvas', e); new obsidian.Notice(t('notice.failed')); }
+      this.syncAdvancedCanvasHints();
+    } else {
+      // Without the vault name the link goes to whichever vault Obsidian picks, not necessarily this one.
+      window.open(advancedCanvasPageUrl(this.app.vault.getName()));
+    }
   }
 
   // Called again after a language change: a command added with the same id replaces the old one.

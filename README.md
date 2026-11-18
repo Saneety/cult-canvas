@@ -32,7 +32,7 @@
 
 ## Install
 
-Cult Canvas needs the [Advanced Canvas](https://github.com/Developer-Mike/obsidian-advanced-canvas) plugin: it provides the shapes and card styles Cult Canvas builds on.
+> **Install [Advanced Canvas](https://github.com/Developer-Mike/obsidian-advanced-canvas) first.** Cult Canvas is built on it. Without it the toolbar still shows, but bend points on arrows, shapes, sticky notes, marker lines and text sizes do not work. While it is missing or turned off, a hint on the board offers to install or enable it.
 
 1. In **Settings → Community plugins → Browse**, install and enable **Advanced Canvas**.
 2. Search for **Cult Canvas**, install and enable it.

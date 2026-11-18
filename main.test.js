@@ -18,7 +18,7 @@ const {
   orderMenuSections, menuHotkeys, swapAltCtrl, swapAltCtrlHandlers,
   isValidWaypoints, sideCenter, edgeRoute, snapWaypoint, shiftWaypoints, boxWithWaypoints, arrowDegrees,
   normalizeHex, markerColorHex, markerColorSetting, addRecentColor, RECENT_COLORS_MAX,
-  STRINGS, setLanguage, t,
+  STRINGS, setLanguage, t, advancedCanvasState, advancedCanvasPageUrl,
 } = logic;
 
 let passed = 0;
@@ -384,6 +384,17 @@ test('bend points move with their cards and grow the arrow box', () => {
   const b = { minX: 0, minY: 0, maxX: 10, maxY: 10 };
   assert.deepStrictEqual(boxWithWaypoints(b, [[-5, 3], [4, 40]]), { minX: -5, minY: 0, maxX: 10, maxY: 40 });
   assert.strictEqual(boxWithWaypoints(b, undefined), b);
+});
+
+test('the hint knows whether Advanced Canvas is on, off or missing', () => {
+  const on = { enabledPlugins: new Set(['advanced-canvas']), manifests: { 'advanced-canvas': {} } };
+  const off = { enabledPlugins: new Set(), manifests: { 'advanced-canvas': {} } };
+  assert.strictEqual(advancedCanvasState(on), 'ok');
+  assert.strictEqual(advancedCanvasState(off), 'off');
+  assert.strictEqual(advancedCanvasState({ enabledPlugins: new Set(), manifests: {} }), 'missing');
+  assert.strictEqual(advancedCanvasState(undefined), 'missing');
+  // the link names the vault: otherwise Obsidian may open the plugin page in another one
+  assert.strictEqual(advancedCanvasPageUrl('my vault'), 'obsidian://show-plugin?vault=my%20vault&id=advanced-canvas');
 });
 
 test('the plugin draws bend points on the arrow prototype and gives them back on unload', () => {

@@ -314,11 +314,36 @@ body.canvas-node-iframe-body[data-gb-kind="sticky"] {
 }
 .gb-toolbar,
 .gb-panel,
+.gb-ac-hint,
 .gb-zoom {
   background: var(--gb-card);
   border: 1px solid var(--gb-line);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
 }
+/* Only while Advanced Canvas is missing or turned off */
+.gb-ac-hint {
+  display: none;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: min(640px, calc(100% - 140px));
+  align-items: center;
+  gap: 12px;
+  padding: 10px 10px 10px 14px;
+  border-radius: 12px;
+  color: var(--gb-ink);
+  font-size: 13px;
+  line-height: 1.35;
+}
+.gb-ac-hint.is-open { display: flex; }
+.gb-ac-title { font-weight: 600; }
+.gb-ac-text { color: var(--gb-soft); }
+.gb-ac-action { flex: none; }
+.gb-ac-close { flex: none; display: flex; padding: 4px; border-radius: 6px; color: var(--gb-soft); cursor: pointer; }
+.gb-ac-close:hover { background: rgba(255, 255, 255, 0.08); color: var(--gb-ink); }
+.gb-ac-close .svg-icon { width: 16px; height: 16px; }
+
 .gb-toolbar {
   left: 12px;
   top: 50%;
