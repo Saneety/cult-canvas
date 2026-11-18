@@ -88,7 +88,7 @@ body.canvas-node-iframe-body {
 /* ---------- cards */
 
 .gb-board .canvas-node,
-body.canvas-node-iframe-body .markdown-source-view { --font-text-size: 18px; }
+body.canvas-node-iframe-body .markdown-source-view { --font-text-size: var(--gb-font-size, 18px); }
 .gb-board .canvas-node[data-gb-size="s"],
 body.canvas-node-iframe-body[data-gb-size="s"] .markdown-source-view { --font-text-size: 14px; }
 .gb-board .canvas-node[data-gb-size="l"],
@@ -100,6 +100,11 @@ body.canvas-node-iframe-body[data-gb-size="xl"] .markdown-source-view { --font-t
 body.canvas-node-iframe-body .markdown-source-view { font-size: var(--font-text-size); }
 
 .gb-board .canvas-node:not(.is-themed):not(.is-selected):not(.is-focused) > .canvas-node-container { border-color: var(--gb-line); }
+
+/* fill and border chosen in the popup (main.js sets the variables); the repeated classes outweigh the rules for
+   stickies, free text, themed and selected cards */
+.gb-board .canvas-node.gb-has-fill.gb-has-fill.gb-has-fill > .canvas-node-container { background: var(--gb-node-fill); }
+.gb-board .canvas-node.gb-has-border.gb-has-border.gb-has-border > .canvas-node-container { border-color: var(--gb-node-border); }
 
 /* round and pointed shapes keep the text inside the outline */
 .gb-board .canvas-node[data-shape="diamond"] .markdown-preview-view { padding-inline: 22%; }
@@ -214,7 +219,7 @@ body.canvas-node-iframe-body[data-gb-kind="sticky"] {
 
 /* arrows: red by default and a bit thicker, handwritten labels */
 .gb-board .canvas-edges { --canvas-color: var(--gb-red); }
-.gb-board .canvas-edges path.canvas-display-path { stroke-width: calc(3px * var(--zoom-multiplier)); stroke-linecap: round; }
+.gb-board .canvas-edges path.canvas-display-path { stroke-width: calc(var(--gb-edge-width, 3px) * var(--zoom-multiplier)); stroke-linecap: round; }
 .gb-board .canvas-path-label {
   font-family: var(--gb-font);
   font-size: 1.15em;
@@ -504,6 +509,9 @@ body.canvas-node-iframe-body[data-gb-kind="sticky"] {
   cursor: copy;
 }
 .gb-bend:hover, .gb-bend.is-dragging { background: var(--gb-blue); border-color: var(--gb-ink); opacity: 1; }
+/* the two ends of the arrow: round, drag one to another card */
+.gb-bend.gb-bend-end { border-radius: 50%; background: var(--gb-bg); border-color: var(--gb-blue); opacity: 1; cursor: grab; }
+.gb-bend.gb-bend-end:hover { background: var(--gb-blue); border-color: var(--gb-ink); }
 
 .gb-nav {
   right: 12px;
@@ -555,6 +563,169 @@ body.canvas-node-iframe-body[data-gb-kind="sticky"] {
 
 .gb-board.canvas-wrapper.is-screenshotting .gb-ui,
 .gb-board.canvas-wrapper.is-screenshotting .gb-overlay { display: none; }
+
+/* ---------- the popup over the selection: one bar for every kind of object, lists open under its buttons.
+   Its own elements are .gb-p; the buttons of Canvas and Advanced Canvas stay in the DOM but are hidden. */
+.gb-board .canvas-menu.gb-popup {
+  align-items: center;
+  gap: 1px;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--gb-card);
+  border: 1px solid var(--gb-line);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+.gb-board .canvas-menu.gb-popup > :not(.gb-p) { display: none; }
+.gb-board .canvas-menu.gb-popup > .gb-p-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: auto;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 5px;
+  border-radius: 7px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--gb-ink);
+}
+.gb-board .canvas-menu.gb-popup > .gb-p-btn:hover,
+.gb-board .canvas-menu.gb-popup > .gb-p-btn.is-open { background: rgba(255, 255, 255, 0.08); }
+.gb-board .canvas-menu.gb-popup > .gb-p-btn.is-selected { background: rgba(93, 178, 255, 0.16); color: var(--gb-blue); }
+.gb-p-icon { display: inline-flex; }
+.gb-p-icon .svg-icon { width: 17px; height: 17px; }
+.gb-p-chevron { display: inline-flex; color: var(--gb-soft); }
+.gb-p-chevron .svg-icon { width: 12px; height: 12px; }
+.gb-p-sep { flex: none; width: 1px; height: 20px; margin: 0 4px; background: var(--gb-line); }
+.gb-p-letter { font-size: 15px; font-weight: 600; line-height: 1; }
+.gb-p-btn.gb-p-lh .gb-p-icon .svg-icon { width: 13px; height: 13px; }
+.gb-p-btn.has-bar::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 3px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--gb-bar);
+}
+.gb-p-btn.has-bar > :first-child { transform: translateY(-2px); }
+.gb-p-dot {
+  display: block;
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--gb-dot);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  overflow: hidden;
+}
+.gb-p-dot.is-ring { background: transparent; border: 4px solid var(--gb-dot); }
+.gb-p-dot.is-none { position: relative; background: transparent; border: 1.5px solid var(--gb-soft); }
+.gb-p-dot.is-none > span {
+  position: absolute;
+  left: 50%;
+  top: -2px;
+  bottom: -2px;
+  width: 1.5px;
+  background: var(--gb-soft);
+  transform: rotate(45deg);
+}
+.gb-p-thick { display: flex; flex-direction: column; justify-content: center; gap: 3px; width: 18px; }
+.gb-p-thick > span { display: block; background: currentColor; border-radius: 2px; }
+.gb-p-thick > span:nth-child(1) { height: 1px; }
+.gb-p-thick > span:nth-child(2) { height: 2px; }
+.gb-p-thick > span:nth-child(3) { height: 4px; }
+.gb-p-filter { text-align: left; font-size: 13px; line-height: 1.15; margin-right: 6px; white-space: nowrap; }
+.gb-p-filter-title { font-size: 11px; color: var(--gb-soft); }
+
+.gb-p-size { display: flex; align-items: center; height: 30px; }
+.gb-board .gb-p-size input {
+  width: 34px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--gb-ink);
+  font-size: 14px;
+  text-align: center;
+}
+.gb-board .gb-p-size input:hover,
+.gb-board .gb-p-size input:focus { background: rgba(255, 255, 255, 0.08); box-shadow: none; }
+.gb-p-steps { display: flex; flex-direction: column; }
+.gb-board .gb-p-steps button { width: 18px; height: 14px; padding: 0; background: transparent; box-shadow: none; color: var(--gb-soft); }
+.gb-board .gb-p-steps button:hover { color: var(--gb-ink); background: rgba(255, 255, 255, 0.08); }
+.gb-p-steps .svg-icon { width: 12px; height: 12px; }
+
+.gb-board .canvas-menu.gb-popup > .gb-p-drop {
+  position: absolute;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-sizing: border-box;
+  width: max-content;
+  min-width: 172px;
+  max-width: 248px;
+  padding: 10px;
+  border-radius: 11px;
+  background: var(--gb-card);
+  border: 1px solid var(--gb-line);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  color: var(--gb-ink);
+}
+.gb-p-title { font-size: 12px; color: var(--gb-soft); }
+.gb-p-title:not(:first-child) { margin-top: 2px; }
+.gb-p-grid { display: grid; gap: 4px; }
+.gb-p-grid-3 { grid-template-columns: repeat(3, 36px); }
+.gb-p-grid-4 { grid-template-columns: repeat(4, 36px); }
+.gb-p-list { grid-template-columns: minmax(0, 1fr); gap: 1px; }
+.gb-p-opt {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  border-radius: 6px;
+  color: var(--gb-ink);
+  cursor: pointer;
+}
+.gb-p-opt:hover { background: rgba(255, 255, 255, 0.08); }
+/* the chosen option: blue, with a line under it */
+.gb-p-opt.is-selected { color: var(--gb-blue); }
+.gb-p-opt.is-selected:not(.gb-p-row)::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--gb-blue);
+}
+.gb-p-opt.gb-p-row { justify-content: flex-start; gap: 10px; padding: 0 8px; font-size: 14px; white-space: nowrap; }
+.gb-p-opt.gb-p-row.is-selected { background: rgba(93, 178, 255, 0.16); }
+.gb-p-opt-text { flex: 1 1 auto; }
+.gb-p-count { margin-left: 18px; color: var(--gb-soft); font-size: 13px; }
+.gb-p-colors { display: grid; grid-template-columns: repeat(6, 26px); gap: 6px; }
+.gb-p-colors .gb-swatch { box-sizing: border-box; }
+.gb-p-colors .gb-swatch.is-selected { border-color: var(--gb-blue); }
+.gb-swatch.gb-swatch-special {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border-color: var(--gb-line);
+  box-shadow: none;
+  color: var(--gb-soft);
+}
+.gb-swatch-special .svg-icon { width: 14px; height: 14px; }
+.gb-p-colors .gb-swatch-special.is-selected { color: var(--gb-blue); }
+.gb-p-drop .gb-width-slider { width: 100%; }
 
 /* ---------- context menu of board elements (right click or "..." in the card popup), Holst-like:
    compact rows without icons, hotkeys on the right, groups split by thin lines, a plain Delete at the bottom */

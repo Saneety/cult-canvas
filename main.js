@@ -77,6 +77,56 @@ const SHAPES = [
   { id: 'database', value: 'database', icon: 'database', w: 220, h: 170 },
 ];
 
+// The popup over the selection. Text sizes are board pixels; 18 is the size of a card nobody changed.
+const FONT_SIZE = { min: 8, max: 200, def: 18, steps: [10, 12, 14, 16, 18, 20, 24, 28, 32, 38, 48, 64, 80, 96, 128] };
+const LEGACY_FONT_SIZES = { s: 14, l: 26, xl: 38 }; // the older gbSize field of existing boards
+const LINE_HEIGHTS = [null, 1, 1.25, 1.5, 2];
+const POPUP_MARGIN = 8; // the popup and its lists keep this far from the board sides and toolbars
+const EDGE_WIDTH = { min: 1, max: 12, def: 3 };
+const POPUP_COLORS = ['#FFFFFF', '#EDEDED', '#A3A6AD', '#1F2126', '#FF5A3D', '#FFB03A', '#FFD54A', '#7CE8A6', '#5DB2FF', '#B48CFF'];
+const TEXT_CONTROLS = ['size', '|', 'bold', 'align', 'list', 'lineHeight', '|', 'textColor', 'highlight'];
+// The buttons of the popup per kind of selection, '|' is a divider.
+const POPUP_CONTROLS = {
+  shape: ['type', 'fill', 'border', '|', ...TEXT_CONTROLS],
+  sticky: ['type', 'fill', '|', ...TEXT_CONTROLS],
+  text: ['type', '|', ...TEXT_CONTROLS, 'fill'],
+  stroke: ['inkColor', 'inkWidth'],
+  edge: ['edgeColor', 'edgeLine', 'edgeEnds'],
+  frame: ['fill', 'border'],
+  image: ['border'],
+  note: ['border', '|', 'size'],
+  link: ['border'],
+  mixed: ['filter'],
+};
+// Buttons of Canvas whose job the popup does itself: not repeated in the "..." menu (colour, arrow direction).
+const POPUP_REPLACED_ICONS = new Set(['lucide-palette', 'lucide-arrow-right']);
+const KIND_ICONS = { shape: 'shapes', sticky: 'sticky-note', text: 'type', stroke: 'pencil', edge: 'arrow-up-right', frame: 'frame', image: 'image', note: 'file-text', link: 'link' };
+const ALIGN_OPTIONS = [{ id: 'left', value: null }, { id: 'center', value: 'center' }, { id: 'right', value: 'right' }];
+// The values and icons are those of Advanced Canvas (its style attributes border, pathfindingMethod, path, arrow).
+const BORDER_OPTIONS = [
+  { id: 'solid', value: null, icon: 'border-solid' }, { id: 'dashed', value: 'dashed', icon: 'border-dashed' },
+  { id: 'dotted', value: 'dotted', icon: 'border-dotted' }, { id: 'none', value: 'invisible', icon: 'eye-off' },
+];
+const EDGE_ROUTES = [
+  { id: 'curve', value: null, icon: 'pathfinding-method-bezier' }, { id: 'direct', value: 'direct', icon: 'slash' },
+  { id: 'square', value: 'square', icon: 'pathfinding-method-square' }, { id: 'smart', value: 'a-star', icon: 'map' },
+];
+const EDGE_PATHS = [
+  { id: 'solid', value: null, icon: 'path-solid' }, { id: 'dotted', value: 'dotted', icon: 'path-dotted' },
+  { id: 'short', value: 'short-dashed', icon: 'path-short-dashed' }, { id: 'long', value: 'long-dashed', icon: 'path-long-dashed' },
+];
+const EDGE_DIRECTIONS = [
+  { id: 'none', fromEnd: 'none', toEnd: 'none', icon: 'minus' }, { id: 'forward', fromEnd: 'none', toEnd: 'arrow', icon: 'arrow-right' },
+  { id: 'back', fromEnd: 'arrow', toEnd: 'none', icon: 'arrow-left' }, { id: 'both', fromEnd: 'arrow', toEnd: 'arrow', icon: 'arrow-left-right' },
+];
+const EDGE_HEADS = [
+  { id: 'triangle', value: null, icon: 'arrow-triangle' }, { id: 'triangleOutline', value: 'triangle-outline', icon: 'arrow-triangle-outline' },
+  { id: 'thin', value: 'thin-triangle', icon: 'arrow-thin-triangle' }, { id: 'halved', value: 'halved-triangle', icon: 'arrow-halved-triangle' },
+  { id: 'diamond', value: 'diamond', icon: 'arrow-diamond' }, { id: 'diamondOutline', value: 'diamond-outline', icon: 'arrow-diamond-outline' },
+  { id: 'circle', value: 'circle', icon: 'arrow-circle' }, { id: 'circleOutline', value: 'circle-outline', icon: 'arrow-circle-outline' },
+  { id: 'blunt', value: 'blunt', icon: 'tally-1' },
+];
+
 const CARD_SIZES = {
   sticky: { w: 220, h: 220, minW: 120, minH: 80 },
   text: { w: 320, h: 70, minW: 80, minH: 40 },
@@ -119,6 +169,20 @@ const STRINGS = {
     'menu.copy': 'Copy', 'menu.front': 'Bring to front', 'menu.forward': 'Bring forward', 'menu.backward': 'Send backward',
     'menu.back': 'Send to back', 'menu.duplicate': 'Duplicate', 'menu.more': 'More', 'menu.removeBends': 'Remove bend points',
     'marker.addColor': 'Add a color', 'marker.ownColor': 'Color {hex}',
+    'popup.type': 'Type', 'popup.fill': 'Fill', 'popup.border': 'Border', 'popup.size': 'Text size', 'popup.sizeUp': 'Larger', 'popup.sizeDown': 'Smaller',
+    'popup.bold': 'Bold', 'popup.align': 'Alignment', 'popup.list': 'List', 'popup.lineHeight': 'Line spacing', 'popup.lineHeightDefault': 'Normal',
+    'popup.textColor': 'Text color', 'popup.highlight': 'Highlight', 'popup.color': 'Color', 'popup.width': 'Thickness',
+    'popup.default': 'Default', 'popup.none': 'None', 'popup.filter': 'Filter', 'popup.line': 'Line', 'popup.ends': 'Arrow ends',
+    'popup.objects.one': '{n} object', 'popup.objects.few': '{n} objects', 'popup.objects.many': '{n} objects',
+    'kind.shape': 'Shape', 'kind.sticky': 'Sticky note', 'kind.text': 'Text', 'kind.stroke': 'Marker line', 'kind.edge': 'Arrow',
+    'kind.frame': 'Frame', 'kind.image': 'Image', 'kind.note': 'Note', 'kind.link': 'Web page',
+    'align.left': 'Left', 'align.center': 'Center', 'align.right': 'Right',
+    'border.solid': 'Solid', 'border.dashed': 'Dashed', 'border.dotted': 'Dotted', 'border.none': 'No border',
+    'route.curve': 'Curved', 'route.direct': 'Straight', 'route.square': 'Right angles', 'route.smart': 'Around cards',
+    'path.solid': 'Solid', 'path.dotted': 'Dotted', 'path.short': 'Short dashes', 'path.long': 'Long dashes',
+    'dir.none': 'No arrows', 'dir.forward': 'Arrow at the end', 'dir.back': 'Arrow at the start', 'dir.both': 'Arrows at both ends',
+    'head.triangle': 'Triangle', 'head.triangleOutline': 'Triangle outline', 'head.thin': 'Thin triangle', 'head.halved': 'Half triangle',
+    'head.diamond': 'Diamond', 'head.diamondOutline': 'Diamond outline', 'head.circle': 'Circle', 'head.circleOutline': 'Circle outline', 'head.blunt': 'Blunt',
     'command.tool': 'Tool: {tool}', 'command.grid': 'Toggle snap to grid',
     'notice.failed': 'Cult Canvas: that did not work, details are in the developer console.',
     'notice.imageFailed': 'Cult Canvas: could not add {name}.',
@@ -144,6 +208,20 @@ const STRINGS = {
     'menu.copy': 'Копировать', 'menu.front': 'На передний план', 'menu.forward': 'Перенести вперёд', 'menu.backward': 'Перенести назад',
     'menu.back': 'На задний план', 'menu.duplicate': 'Дублировать', 'menu.more': 'Ещё', 'menu.removeBends': 'Убрать узлы',
     'marker.addColor': 'Добавить цвет', 'marker.ownColor': 'Цвет {hex}',
+    'popup.type': 'Тип', 'popup.fill': 'Заливка', 'popup.border': 'Обводка', 'popup.size': 'Размер текста', 'popup.sizeUp': 'Крупнее', 'popup.sizeDown': 'Мельче',
+    'popup.bold': 'Жирный', 'popup.align': 'Выравнивание', 'popup.list': 'Список', 'popup.lineHeight': 'Межстрочный интервал', 'popup.lineHeightDefault': 'Обычный',
+    'popup.textColor': 'Цвет текста', 'popup.highlight': 'Выделение текста', 'popup.color': 'Цвет', 'popup.width': 'Толщина',
+    'popup.default': 'По умолчанию', 'popup.none': 'Нет', 'popup.filter': 'Фильтр', 'popup.line': 'Линия', 'popup.ends': 'Концы стрелки',
+    'popup.objects.one': '{n} объект', 'popup.objects.few': '{n} объекта', 'popup.objects.many': '{n} объектов',
+    'kind.shape': 'Фигуры', 'kind.sticky': 'Стикеры', 'kind.text': 'Текст', 'kind.stroke': 'Линии маркера', 'kind.edge': 'Стрелки',
+    'kind.frame': 'Разделы', 'kind.image': 'Картинки', 'kind.note': 'Заметки', 'kind.link': 'Веб-страницы',
+    'align.left': 'По левому краю', 'align.center': 'По центру', 'align.right': 'По правому краю',
+    'border.solid': 'Сплошная', 'border.dashed': 'Штрихи', 'border.dotted': 'Точки', 'border.none': 'Без обводки',
+    'route.curve': 'Кривая', 'route.direct': 'Прямая', 'route.square': 'Под прямым углом', 'route.smart': 'В обход карточек',
+    'path.solid': 'Сплошная', 'path.dotted': 'Точки', 'path.short': 'Короткие штрихи', 'path.long': 'Длинные штрихи',
+    'dir.none': 'Без стрелок', 'dir.forward': 'Стрелка в конце', 'dir.back': 'Стрелка в начале', 'dir.both': 'Стрелки с двух сторон',
+    'head.triangle': 'Треугольник', 'head.triangleOutline': 'Контур треугольника', 'head.thin': 'Тонкий треугольник', 'head.halved': 'Половина треугольника',
+    'head.diamond': 'Ромб', 'head.diamondOutline': 'Контур ромба', 'head.circle': 'Круг', 'head.circleOutline': 'Контур круга', 'head.blunt': 'Черта',
     'command.tool': 'Инструмент: {tool}', 'command.grid': 'Привязка к сетке: вкл/выкл',
     'notice.failed': 'Cult Canvas: не получилось, подробности в консоли разработчика.',
     'notice.imageFailed': 'Cult Canvas: не удалось добавить {name}.',
@@ -695,7 +773,174 @@ function advancedCanvasState(plugins) {
 
 const advancedCanvasPageUrl = (vault) => `obsidian://show-plugin?vault=${encodeURIComponent(vault)}&id=${ADVANCED_CANVAS_ID}`;
 
+// The next point of a marker line. With Shift the line runs straight from the point where Shift took effect
+// (`from`, an index in points) to the pointer; without it the line goes on freehand. Returns the new `from`.
+function addStrokePoint(points, p, straight, from = null) {
+  if (!straight) { points.push(p); return null; }
+  const anchor = from === null ? points.length - 1 : from;
+  points.length = anchor + 1;
+  points.push(p);
+  return anchor;
+}
+
+// ---------- the popup over the selection
+
+// What the popup treats as one kind of object; a selection of several kinds gets the filter instead.
+function popupKindOf(data, isEdge) {
+  if (isEdge) return 'edge';
+  if (!data) return null;
+  if (data.gbStroke) return 'stroke';
+  if (data.type === 'group') return 'frame';
+  if (data.type === 'link') return 'link';
+  if (data.type === 'file') {
+    const ext = String(data.file || '').split('.').pop().toLowerCase();
+    return IMAGE_EXTENSIONS.has(ext) ? 'image' : 'note';
+  }
+  if (data.type !== 'text') return null;
+  const kind = (data.styleAttributes || {}).gbKind;
+  return kind === 'sticky' || kind === 'text' ? kind : 'shape';
+}
+
+// [{ kind, count }], the most numerous first.
+function selectionKinds(kinds) {
+  const counts = new Map();
+  for (const k of kinds) if (k) counts.set(k, (counts.get(k) || 0) + 1);
+  return Array.from(counts, ([kind, count]) => ({ kind, count })).sort((a, b) => b.count - a.count);
+}
+
+function objectsLabel(n) {
+  const d10 = n % 10, d100 = n % 100;
+  const form = currentLanguage === 'ru'
+    ? (d10 === 1 && d100 !== 11 ? 'one' : d10 >= 2 && d10 <= 4 && (d100 < 12 || d100 > 14) ? 'few' : 'many')
+    : (n === 1 ? 'one' : 'many');
+  return t(`popup.objects.${form}`, { n });
+}
+
+function clampFontSize(v, fallback = FONT_SIZE.def) {
+  const n = Math.round(Number(v));
+  return Number.isFinite(n) && n > 0 ? Math.min(FONT_SIZE.max, Math.max(FONT_SIZE.min, n)) : fallback;
+}
+
+function fontSizeOf(sa) {
+  const s = sa || {};
+  return Number.isFinite(s.gbFontSize) ? clampFontSize(s.gbFontSize) : LEGACY_FONT_SIZES[s.gbSize] || FONT_SIZE.def;
+}
+
+function stepFontSize(size, dir) {
+  const next = dir > 0 ? FONT_SIZE.steps.find((s) => s > size) : [...FONT_SIZE.steps].reverse().find((s) => s < size);
+  return next === undefined ? size : next;
+}
+
+// A copy of the element data with these style attributes set; null removes one.
+function withStyle(data, patch) {
+  const sa = { ...(data.styleAttributes || {}) };
+  for (const [k, v] of Object.entries(patch)) { if (v === null || v === undefined) delete sa[k]; else sa[k] = v; }
+  const next = { ...data };
+  if (Object.keys(sa).length) next.styleAttributes = sa; else delete next.styleAttributes;
+  return next;
+}
+
+// value: a SHAPES value id ('rect', 'diamond'...), 'sticky' or 'text'.
+function withCardType(data, value) {
+  const shape = SHAPES.find((s) => s.id === value);
+  if (shape) return withStyle(data, { gbKind: null, shape: shape.value, textAlign: (data.styleAttributes || {}).textAlign || 'center' });
+  return withStyle(data, { gbKind: value, shape: null });
+}
+
+function cardTypeOf(data) {
+  const sa = (data && data.styleAttributes) || {};
+  if (sa.gbKind === 'sticky' || sa.gbKind === 'text') return sa.gbKind;
+  const shape = SHAPES.find((s) => s.value === (sa.shape || null));
+  return shape ? shape.id : null;
+}
+
+// Bold and highlight are Markdown around each line, so the board stays readable as a plain file.
+const LINE_PARTS = /^(\s*(?:(?:[-*+]|\d+[.)])\s+|#{1,6}\s+|>\s*|\[[ xX]\]\s+)*)(.*?)(\s*)$/;
+const LINE_MARKS = ['==', '**'];
+
+function parseLine(line) {
+  const [, prefix, body, tail] = line.match(LINE_PARTS);
+  const marks = new Set();
+  let core = body;
+  for (let found = true; found;) {
+    found = false;
+    for (const m of LINE_MARKS) {
+      if (core.length > m.length * 2 && core.startsWith(m) && core.endsWith(m)) {
+        core = core.slice(m.length, -m.length);
+        marks.add(m);
+        found = true;
+      }
+    }
+  }
+  return { prefix, core, tail, marks };
+}
+
+const filledLines = (text) => String(text || '').split('\n').filter((l) => l.trim());
+
+function hasLineMark(text, mark) {
+  const lines = filledLines(text);
+  return lines.length > 0 && lines.every((l) => parseLine(l).marks.has(mark));
+}
+
+function setLineMark(text, mark, on) {
+  return String(text || '').split('\n').map((line) => {
+    if (!line.trim()) return line;
+    const p = parseLine(line);
+    if (!p.core) return line;
+    if (on) p.marks.add(mark); else p.marks.delete(mark);
+    const open = LINE_MARKS.filter((m) => p.marks.has(m)).join('');
+    const close = [...LINE_MARKS].reverse().filter((m) => p.marks.has(m)).join('');
+    return `${p.prefix}${open}${p.core}${close}${p.tail}`;
+  }).join('\n');
+}
+
+const LIST_LINE = /^(\s*)[-*+]\s+/;
+
+function hasList(text) {
+  const lines = filledLines(text);
+  return lines.length > 0 && lines.every((l) => LIST_LINE.test(l));
+}
+
+function toggleList(text) {
+  const off = hasList(text);
+  return String(text || '').split('\n').map((l) => {
+    if (!l.trim()) return l;
+    return off ? l.replace(LIST_LINE, '$1') : LIST_LINE.test(l) ? l : l.replace(/^(\s*)/, '$1- ');
+  }).join('\n');
+}
+
+// A marker line with another width: its box is padded by the width, the line stays where it is on the board.
+function withStrokeWidth(data, size) {
+  const s = data.gbStroke;
+  const sx = data.width / s.w, sy = data.height / s.h;
+  const built = buildStrokeNode(s.points.map(([x, y]) => [data.x + x * sx, data.y + y * sy]), clampMarkerWidth(size));
+  return { ...data, ...built };
+}
+
+const isCssColor = (v) => v === 'transparent' || /^#[0-9a-f]{3,8}$/i.test(String(v));
+
+// What the style attributes of the popup set on a card: CSS variables, read by styles.css.
+function nodeStyleVars(sa) {
+  const s = sa || {};
+  const vars = {};
+  if (isCssColor(s.gbFill)) vars['--gb-node-fill'] = s.gbFill;
+  if (isCssColor(s.gbBorder)) vars['--gb-node-border'] = s.gbBorder;
+  if (isCssColor(s.gbTextColor)) vars['--text-normal'] = s.gbTextColor;
+  if (isCssColor(s.gbHighlight)) vars['--text-highlight-bg'] = s.gbHighlight;
+  if (Number.isFinite(s.gbFontSize)) vars['--gb-font-size'] = `${clampFontSize(s.gbFontSize)}px`;
+  if (Number.isFinite(s.gbLineHeight) && s.gbLineHeight >= 0.8 && s.gbLineHeight <= 3) vars['--line-height-normal'] = String(s.gbLineHeight);
+  return vars;
+}
+const NODE_STYLE_VARS = ['--gb-node-fill', '--gb-node-border', '--text-normal', '--text-highlight-bg', '--gb-font-size', '--line-height-normal'];
+
+function clampEdgeWidth(v) {
+  const n = Math.round(Number(v));
+  return Number.isFinite(n) ? Math.min(EDGE_WIDTH.max, Math.max(EDGE_WIDTH.min, n)) : EDGE_WIDTH.def;
+}
+
 const logic = {
+  addStrokePoint, popupKindOf, selectionKinds, objectsLabel, POPUP_CONTROLS, clampFontSize, fontSizeOf, stepFontSize, withStyle, withCardType, cardTypeOf,
+  hasLineMark, setLineMark, hasList, toggleList, withStrokeWidth, nodeStyleVars, NODE_STYLE_VARS, clampEdgeWidth,
   advancedCanvasState, advancedCanvasPageUrl, MARKER_COLORS, MARKER_WIDTH, TOOLS, SHAPES, OVERLAY_TOOLS, ONE_SHOT_TOOLS, clampMarkerWidth,
   dedupePoints, buildStrokeNode, isValidStroke, distToSegment, strokeDistance, strokeHit, samplePath,
   getSvgPathFromStroke, strokeOutlinePoints, strokeOutlinePath, centerlinePath, dragRect, centeredRect, unionBounds,
@@ -755,6 +1000,20 @@ function drawBends(edge) {
   turn(edge.fromLineEnd, route.start, route.fromDeg);
   turn(edge.toLineEnd, route.end, route.toDeg);
   edge.center = route.center; // Advanced Canvas puts the label here (advanced-canvas:edge-center-requested)
+}
+
+// Puts the popup's style of a card on its element (or on the body of its text editor).
+function applyNodeVars(el, styleAttributes) {
+  const vars = styleAttributes ? nodeStyleVars(styleAttributes) : {};
+  for (const name of NODE_STYLE_VARS) {
+    if (name in vars) el.style.setProperty(name, vars[name]); else el.style.removeProperty(name);
+  }
+  // On the card the size is the variable its text reads; the editor reads --gb-font-size (styles.css).
+  if (el.hasClass('canvas-node')) {
+    if (vars['--gb-font-size']) el.style.setProperty('--font-text-size', vars['--gb-font-size']); else el.style.removeProperty('--font-text-size');
+  }
+  el.toggleClass('gb-has-fill', '--gb-node-fill' in vars);
+  el.toggleClass('gb-has-border', '--gb-node-border' in vars);
 }
 
 const isEdgeItem = (item) => !!(item && item.from && item.to && !item.nodeEl);
@@ -818,7 +1077,7 @@ class Board {
     this.plugin.patchEdgeProto(this.canvas.edges && this.canvas.edges.values().next().value);
     this.decorateAll();
     this.snapshotSelection();
-    this.addMoreButton();
+    this.renderPopup();
     this.syncAdvancedCanvasHint();
     this.requestRender();
   }
@@ -938,6 +1197,11 @@ class Board {
     this.setTooltip(acClose, t('ac.close'));
     acClose.addEventListener('click', () => this.plugin.closeAdvancedCanvasHint());
 
+    // A press anywhere outside the popup closes its open list.
+    const closeList = (e) => { if (this.popOpen && !(e.target instanceof Element && e.target.closest('.canvas-menu'))) this.closeDropdown(); };
+    w.addEventListener('pointerdown', closeList, true);
+    this.restorers.push(() => w.removeEventListener('pointerdown', closeList, true));
+
     // Clicks on our panels must not reach Canvas (it would start a selection box or deselect),
     // nor arrow keys on the slider (Canvas would move the selected cards).
     for (const el of [this.toolbarEl, this.markerPanel, this.shapePanel, this.navEl, this.acHintEl]) {
@@ -969,8 +1233,7 @@ class Board {
     if (this.frame) window.cancelAnimationFrame(this.frame);
     window.clearTimeout(this.styleTimer);
     for (const restore of this.restorers.splice(0)) restore();
-    const more = this.canvas.menu && this.canvas.menu.menuEl && this.canvas.menu.menuEl.querySelector('.gb-more');
-    if (more) more.remove();
+    if (this.canvas.menu && this.canvas.menu.menuEl) this.clearPopup(this.canvas.menu.menuEl);
     for (const el of [this.overlayEl, this.toolbarEl, this.markerPanel, this.shapePanel, this.navEl, this.acHintEl]) el && el.remove();
     const w = this.canvas.wrapperEl;
     w.removeClass('gb-board', 'gb-space');
@@ -1115,7 +1378,7 @@ class Board {
     const list = events.length ? events : [e];
     for (const ev of list) {
       const pos = this.canvas.posFromEvt(ev);
-      if (g.tool === 'marker') g.points.push([pos.x, pos.y]);
+      if (g.tool === 'marker') g.straightFrom = addStrokePoint(g.points, [pos.x, pos.y], e.shiftKey, g.straightFrom);
       else if (g.tool === 'eraser') {
         for (const p of samplePath(g.last, pos, ERASER_RADIUS_PX / (this.canvas.scale || 1) / 2)) this.eraseAt(g, p);
       }
@@ -1134,8 +1397,10 @@ class Board {
     this.clearTransient(g);
     const pos = this.canvas.posFromEvt(e);
     try {
-      if (g.tool === 'marker') this.finishStroke(g);
-      else if (g.tool === 'eraser') this.finishErase(g);
+      if (g.tool === 'marker') {
+        if (e.shiftKey) addStrokePoint(g.points, [pos.x, pos.y], true, g.straightFrom);
+        this.finishStroke(g);
+      } else if (g.tool === 'eraser') this.finishErase(g);
       else if (g.tool === 'sticky' || g.tool === 'text' || g.tool === 'shape') this.placeCard(g, pos);
       else if (g.tool === 'frame') this.placeFrame(g, pos);
     } catch (err) {
@@ -1327,7 +1592,10 @@ class Board {
     if (node.gbStrokeSvg) node.gbStrokeSvg.remove();
     node.gbStrokeSvg = null;
     node.gbStrokeRef = null;
-    if (node.nodeEl) node.nodeEl.removeClass('gb-stroke', 'gb-erasing');
+    if (node.nodeEl) {
+      node.nodeEl.removeClass('gb-stroke', 'gb-erasing');
+      applyNodeVars(node.nodeEl, null);
+    }
   }
 
   // Strokes are cards with an empty box around the line: only the line itself may catch the pointer,
@@ -1496,7 +1764,8 @@ class Board {
     if (!edge) { if (layer.childElementCount) layer.empty(); return; }
     const w = waypointsOf(edge) || [];
     const route = w.length ? edgeBendRoute(edge) : null;
-    const spots = w.map((p, i) => ({ kind: 'point', index: i, x: p[0], y: p[1] }));
+    const spots = [edge.from, edge.to].map((end, i) => ({ kind: 'end', index: i, ...sideCenter(end.node.getBBox(), end.side) }));
+    w.forEach((p, i) => spots.push({ kind: 'point', index: i, x: p[0], y: p[1] }));
     const mids = route ? route.mids : [edge.getCenter()];
     mids.forEach((m, i) => { if (m && Number.isFinite(m.x)) spots.push({ kind: 'mid', index: i, x: m.x, y: m.y }); });
     const els = Array.from(layer.children);
@@ -1525,6 +1794,7 @@ class Board {
     e.stopPropagation(); // Canvas would start a selection box or deselect the arrow
     const edge = this.bendLayer.gbEdge;
     if (e.button !== 0 || !edge || this.bend) return;
+    if (handle.dataset.kind === 'end') { this.dragEdgeEnd(edge, e); return; }
     e.preventDefault();
     // A second press on the same point soon after the first is a double click: remove the point. (With the pointer
     // captured by the layer, the dblclick event itself goes to the layer, not to the handle.)
@@ -1541,6 +1811,32 @@ class Board {
       edge, pointerId: e.pointerId, kind: handle.dataset.kind, index: Number(handle.dataset.index),
       startClient: { x: e.clientX, y: e.clientY }, before: waypointsOf(edge), moved: false,
     };
+  }
+
+  // The end of the selected arrow moves to another card with the drag of Canvas itself (it takes the end nearest to
+  // the pointer). Canvas deletes an arrow dropped on the empty board; from a handle that only cancels the move.
+  dragEdgeEnd(edge, e) {
+    const canvas = this.canvas;
+    const { from, to } = edge;
+    const own = Object.prototype.hasOwnProperty.call(canvas, 'removeEdge');
+    const removeEdge = canvas.removeEdge;
+    canvas.removeEdge = function (item, ...rest) {
+      if (item === edge) { edge.update(from, to); return undefined; }
+      return removeEdge.call(this, item, ...rest);
+    };
+    const win = canvas.wrapperEl.win || window;
+    const finish = () => {
+      win.removeEventListener('pointerup', finish, true);
+      win.removeEventListener('pointercancel', finish, true);
+      // After the handlers of Canvas: its drop is what still needs the guard.
+      window.setTimeout(() => {
+        if (own) canvas.removeEdge = removeEdge; else delete canvas.removeEdge;
+        if (!this.destroyed && canvas.edges.get(edge.id) === edge && !canvas.selection.has(edge)) canvas.selectOnly(edge);
+      }, 0);
+    };
+    win.addEventListener('pointerup', finish, true);
+    win.addEventListener('pointercancel', finish, true);
+    edge.onConnectionPointerdown(e);
   }
 
   onBendMove(e) {
@@ -1735,28 +2031,31 @@ class Board {
     queueMicrotask(() => { if (!this.destroyed) this.snapshotSelection(); });
   }
 
-  applyDefaultStyle(item) {
+  // preview: the arrow is still being dragged out, it only has to look right; the final pass comes on release.
+  applyDefaultStyle(item, preview = false) {
     if (this.destroyed || !item || item.gbStyled) return;
     const isEdge = isEdgeItem(item);
     const live = isEdge ? this.canvas.edges : this.canvas.nodes;
     if (!live || live.get(item.id) !== item) return;
     const data = item.getData();
     const style = this.plugin.styleFor(styleKindOf(data, isEdge));
-    item.gbStyled = true;
+    if (!preview) item.gbStyled = true;
     if (!style) return;
     const next = applyStyle(data, style, isEdge);
     if (JSON.stringify(next) === JSON.stringify(data)) return;
     item.setData(next);
     // Advanced Canvas redraws an arrow's path only while it is dirty or selected, and a new arrow is neither.
     if (isEdge && this.canvas.markDirty) this.canvas.markDirty(item);
-    this.canvas.requestSave();
+    if (!preview) this.canvas.requestSave();
   }
 
-  // Advanced Canvas sets the ends of a new arrow when the pointer is released: go after it.
+  // Advanced Canvas sets the ends of a new arrow when the pointer is released: go after it. The line shape, colour
+  // and dashes are put on at once, so the arrow already looks like itself while it is dragged out.
   applyDefaultEdgeStyle(edge) {
     const el = this.canvas.canvasEl;
     const run = () => window.setTimeout(() => this.applyDefaultStyle(edge), 0);
     if (!el || !el.hasClass('is-connecting')) { run(); return; }
+    queueMicrotask(() => this.applyDefaultStyle(edge, true));
     const observer = new MutationObserver(() => {
       if (el.hasClass('is-connecting')) return;
       observer.disconnect();
@@ -1791,6 +2090,7 @@ class Board {
     if (!canvas.readonly && nodes.length) add('gb-edit', t('menu.duplicate'), 'lucide-files', `${MOD_LABEL}+D`, () => this.duplicateSelection());
     const bent = Array.from(canvas.selection).filter((x) => isEdgeItem(x) && waypointsOf(x));
     if (!canvas.readonly && bent.length) add('gb-edit', t('menu.removeBends'), pickIcon(['spline', 'route', 'waypoints']), '', () => this.removeBends(bent));
+    this.addHiddenPopupActions(menu, add);
     // Other plugins may still add items: order the sections and label the hotkeys when the menu opens.
     const sort = menu.sort;
     if (typeof sort !== 'function') return;
@@ -1816,18 +2116,455 @@ class Board {
     }
   }
 
-  // The "..." button in the card popup opens the same menu as a right click on the selection.
-  addMoreButton() {
+  // The popup replaces the buttons of Canvas and Advanced Canvas (styles.css hides them). What it does not cover,
+  // such as the buttons of other plugins, moves to the "..." menu unless that menu already has the same item.
+  addHiddenPopupActions(menu, add) {
     const el = this.canvas.menu && this.canvas.menu.menuEl;
-    if (!el || el.querySelector('.gb-more')) return;
-    const btn = el.createEl('button', { cls: 'clickable-icon gb-more' });
-    obsidian.setIcon(btn, 'more-horizontal');
-    this.setTooltip(btn, t('menu.more'), 'top');
-    btn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.openContextMenu(btn);
+    if (!el || !el.hasClass('gb-popup')) return;
+    const titles = new Set(menu.items.map((i) => i.titleEl && i.titleEl.textContent));
+    for (const btn of Array.from(el.children)) {
+      if (btn.hasClass('gb-p') || btn.id.startsWith('menu-option-')) continue;
+      const svg = btn.querySelector('svg');
+      const icon = svg ? Array.from(svg.classList).find((c) => c !== 'svg-icon') : '';
+      if (POPUP_REPLACED_ICONS.has(icon)) continue;
+      const title = (btn.getAttribute('aria-label') || '').split('\n')[0];
+      if (title && !titles.has(title)) add('gb-edit', title, icon || 'circle', '', () => btn.click());
+    }
+  }
+
+  // ---------- the popup over the selection
+
+  popupState() {
+    const items = Array.from(this.canvas.selection);
+    const kinds = items.map((x) => popupKindOf(x.getData(), isEdgeItem(x)));
+    const groups = selectionKinds(kinds);
+    const kind = groups.length > 1 ? 'mixed' : groups.length ? groups[0].kind : null;
+    const data = items.length ? items[0].getData() : {};
+    return { items, kinds, groups, kind, data, sa: data.styleAttributes || {} };
+  }
+
+  // Called on every render of the Canvas popup, also while the board moves: rebuilt only when something changed.
+  renderPopup(force) {
+    const el = this.canvas.menu && this.canvas.menu.menuEl;
+    if (!el || this.destroyed) return;
+    const st = this.popupState();
+    const key = JSON.stringify([this.canvas.readonly, st.items.map((x) => {
+      const d = x.getData();
+      return [d.id, d.color, d.styleAttributes, d.text, d.fromEnd, d.toEnd, d.gbStroke && d.gbStroke.size];
+    })]);
+    if (!force && key === this.popupKey && el.querySelector(':scope > .gb-p-more')) { this.scheduleFitPopup(el); return; }
+    this.popupKey = key;
+    const open = this.popOpen;
+    this.clearPopup(el);
+    this.popOpen = open;
+    if (!st.kind) { this.popOpen = null; return; }
+    el.addClass('gb-popup');
+    this.popBar = { el, st, dropdowns: {} };
+    const controls = POPUP_CONTROLS[st.kind] || [];
+    const usable = this.canvas.readonly ? controls.filter((c) => c === 'filter') : controls;
+    usable.forEach((c) => { if (c === '|') el.createDiv({ cls: 'gb-p gb-p-sep' }); else this[`pop_${c}`](st); });
+    if (usable.length) el.createDiv({ cls: 'gb-p gb-p-sep' });
+    const more = this.popButton('more', { icon: 'more-horizontal', label: t('menu.more') });
+    more.addClass('gb-p-more', 'gb-more');
+    more.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); this.closeDropdown(); this.openContextMenu(more); });
+    this.scheduleFitPopup(el);
+    if (this.popOpen && this.popBar.dropdowns[this.popOpen]) this.openDropdown(this.popOpen);
+    else this.popOpen = null;
+  }
+
+  // Canvas places the bar after this event, so it is measured on the next frame.
+  scheduleFitPopup(el) {
+    if (this.popFitFrame) return;
+    this.popFitFrame = window.requestAnimationFrame(() => {
+      this.popFitFrame = 0;
+      if (this.destroyed || !el.hasClass('gb-popup')) return;
+      this.fitPopup(el);
+      this.placeDropdown();
     });
+  }
+
+  // The free width of the board at the height top..bottom: between the left toolbar and the right buttons.
+  popupRoom(top, bottom) {
+    const wr = this.canvas.wrapperEl.getBoundingClientRect();
+    const room = { min: wr.left + POPUP_MARGIN, max: wr.right - POPUP_MARGIN };
+    const beside = (r) => r.width > 0 && r.top < bottom && r.bottom > top;
+    const tools = this.toolbarEl && this.toolbarEl.getBoundingClientRect();
+    if (tools && beside(tools)) room.min = Math.max(room.min, tools.right + POPUP_MARGIN);
+    const controls = this.canvas.wrapperEl.querySelector('.canvas-controls');
+    const right = controls && controls.getBoundingClientRect();
+    if (right && beside(right)) room.max = Math.min(room.max, right.left - POPUP_MARGIN);
+    return room;
+  }
+
+  // Keeps the bar off the toolbars (Canvas puts it over the selection, wherever that is).
+  fitPopup(el) {
+    const now = parseFloat(el.style.left) || 0;
+    const r = el.getBoundingClientRect();
+    const room = this.popupRoom(r.top, r.bottom);
+    const base = r.left - now;
+    const left = Math.max(room.min, Math.min(room.max - r.width, base));
+    const shift = Math.round(left - base);
+    if (shift !== now) el.style.left = shift ? `${shift}px` : '';
+  }
+
+  clearPopup(el) {
+    this.popOpen = null;
+    el.style.left = '';
+    el.removeClass('gb-popup');
+    for (const c of Array.from(el.querySelectorAll(':scope > .gb-p'))) c.remove();
+  }
+
+  popButton(name, { icon, label, active, chevron, dropdown, onClick }) {
+    const { el, dropdowns } = this.popBar;
+    const b = el.createEl('button', { cls: 'clickable-icon gb-p gb-p-btn', attr: { 'data-control': name } });
+    if (icon) obsidian.setIcon(b.createSpan({ cls: 'gb-p-icon' }), icon);
+    if (active) b.addClass('is-selected');
+    this.setTooltip(b, label, 'top');
+    if (dropdown) {
+      dropdowns[name] = { anchor: b, build: dropdown };
+      b.setAttr('aria-haspopup', 'true');
+      b.addEventListener('click', () => { if (this.popOpen === name) this.closeDropdown(); else this.openDropdown(name); });
+    } else if (onClick) b.addEventListener('click', onClick);
+    if (chevron) obsidian.setIcon(b.createSpan({ cls: 'gb-p-chevron' }), 'chevron-down');
+    return b;
+  }
+
+  openDropdown(name) {
+    this.closeDropdown();
+    const entry = this.popBar && this.popBar.dropdowns[name];
+    if (!entry) return;
+    this.popOpen = name;
+    entry.anchor.addClass('is-open');
+    const panel = this.popBar.el.createDiv({ cls: 'gb-p gb-p-drop' });
+    panel.addEventListener('pointerdown', (e) => e.stopPropagation());
+    panel.addEventListener('keydown', (e) => e.stopPropagation());
+    entry.build(panel);
+    this.popPanel = panel;
+    this.placeDropdown();
+  }
+
+  // Under the button, or above it when the board has no room below; never under the toolbars.
+  placeDropdown() {
+    const panel = this.popPanel;
+    const entry = this.popBar && this.popBar.dropdowns[this.popOpen];
+    if (!panel || !entry) return;
+    const wr = this.canvas.wrapperEl.getBoundingClientRect();
+    const mr = this.popBar.el.getBoundingClientRect();
+    const ar = entry.anchor.getBoundingClientRect();
+    const pr = panel.getBoundingClientRect();
+    const below = mr.bottom + 6 + pr.height <= wr.bottom - POPUP_MARGIN || mr.top - 6 - pr.height < wr.top + POPUP_MARGIN;
+    const top = below ? mr.bottom + 6 : mr.top - 6 - pr.height;
+    const room = this.popupRoom(top, top + pr.height);
+    const left = Math.max(room.min, Math.min(room.max - pr.width, ar.left));
+    panel.style.left = `${Math.round(left - mr.left)}px`;
+    panel.style.top = `${Math.round(top - mr.top)}px`;
+  }
+
+  closeDropdown() {
+    this.popOpen = null;
+    if (this.popPanel) this.popPanel.remove();
+    this.popPanel = null;
+    if (this.popBar) for (const d of Object.values(this.popBar.dropdowns)) d.anchor.removeClass('is-open');
+  }
+
+  // Changes every selected element, as one undo step, and shows the new state in the popup.
+  applyPopup(fn, { history = true, close = false } = {}) {
+    const canvas = this.canvas;
+    for (const item of canvas.selection) {
+      const data = item.getData();
+      const next = fn(data, item);
+      if (!next || JSON.stringify(next) === JSON.stringify(data)) continue;
+      item.setData(next);
+      if (isEdgeItem(item)) { this.plugin.decorateEdge(item); if (canvas.markDirty) canvas.markDirty(item); } else this.plugin.decorate(item);
+    }
+    if (history) {
+      canvas.requestSave(); // also the undo step
+      if (close) this.popOpen = null;
+      this.renderPopup(true);
+    }
+  }
+
+  applyStylePatch(patch, opts) { this.applyPopup((d) => withStyle(d, patch), opts); }
+
+  // Text changes go to the open editor of a card being edited, otherwise its text would come back.
+  applyText(fn) {
+    this.applyPopup((d, item) => {
+      if (d.type !== 'text' || d.gbStroke) return null;
+      const editor = item.isEditing && item.child && item.child.editor;
+      if (!editor) return { ...d, text: fn(d.text || '') };
+      editor.setValue(fn(editor.getValue()));
+      return null;
+    });
+  }
+
+  popOption(parent, { icon, text, label, active, onClick, count }) {
+    const o = parent.createDiv({ cls: text ? 'gb-p-opt gb-p-row' : 'gb-p-opt' });
+    if (active) o.addClass('is-selected');
+    if (icon) obsidian.setIcon(o.createSpan({ cls: 'gb-p-icon' }), icon);
+    if (text) o.createSpan({ cls: 'gb-p-opt-text', text });
+    if (count !== undefined) o.createSpan({ cls: 'gb-p-count', text: String(count) });
+    if (!text && label) this.setTooltip(o, label, 'top');
+    o.addEventListener('click', onClick);
+    return o;
+  }
+
+  popGroup(panel, title, cls = '') {
+    if (title) panel.createDiv({ cls: 'gb-p-title', text: title });
+    return panel.createDiv({ cls: `gb-p-grid ${cls}` });
+  }
+
+  // value: the current colour or null. def / none add the "default" and "no colour" choices.
+  popColors(panel, { value, def, none, onPick }) {
+    const same = (c) => !!value && value.toLowerCase() === c.toLowerCase();
+    const row = panel.createDiv({ cls: 'gb-p-colors' });
+    const swatch = (hex) => {
+      const s = row.createDiv({ cls: 'gb-swatch' });
+      s.style.setProperty('--gb-swatch', hex);
+      s.toggleClass('is-selected', same(hex));
+      this.setTooltip(s, hex, 'top');
+      s.addEventListener('click', () => onPick(hex));
+    };
+    const special = (icon, label, active, v) => {
+      const s = row.createDiv({ cls: 'gb-swatch gb-swatch-special' });
+      obsidian.setIcon(s, icon);
+      s.toggleClass('is-selected', active);
+      this.setTooltip(s, label, 'top');
+      s.addEventListener('click', () => onPick(v));
+    };
+    if (def) special('rotate-ccw', t('popup.default'), !value, null);
+    if (none) special('ban', t('popup.none'), value === 'transparent', 'transparent');
+    POPUP_COLORS.forEach(swatch);
+    (this.settings.markerRecentColors || []).filter((c) => !POPUP_COLORS.some((p) => p.toLowerCase() === c.toLowerCase())).forEach(swatch);
+    const add = row.createDiv({ cls: 'gb-swatch gb-add-color' });
+    obsidian.setIcon(add, 'plus');
+    this.setTooltip(add, t('marker.addColor'), 'top');
+    const input = add.createEl('input', { cls: 'gb-color-input', attr: { type: 'color', 'aria-label': t('marker.addColor') } });
+    input.value = value && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : '#ffffff';
+    input.addEventListener('change', () => {
+      const hex = normalizeHex(input.value);
+      if (!hex) return;
+      this.settings.markerRecentColors = addRecentColor(this.settings.markerRecentColors, hex);
+      void this.plugin.saveSettings();
+      onPick(hex);
+    });
+  }
+
+  popSlider(panel, { title, min, max, value, onInput, onChange }) {
+    const head = panel.createDiv({ cls: 'gb-panel-head' });
+    head.createSpan({ text: title });
+    const label = head.createSpan({ cls: 'gb-width-value', text: `${value} px` });
+    const input = panel.createEl('input', { cls: 'gb-width-slider', attr: { type: 'range', min, max, step: 1, 'aria-label': title } });
+    const paint = (v) => {
+      label.setText(`${v} px`);
+      input.style.setProperty('--gb-fill', `${((v - min) / (max - min)) * 100}%`);
+    };
+    input.value = String(value);
+    paint(value);
+    input.addEventListener('input', () => { const v = Number(input.value); paint(v); onInput(v); });
+    input.addEventListener('change', () => onChange(Number(input.value)));
+  }
+
+  popSwatchButton(name, label, style, dropdown) {
+    const b = this.popButton(name, { label, dropdown });
+    const dot = b.createSpan({ cls: `gb-p-dot ${style.ring ? 'is-ring' : ''}` });
+    dot.prepend(createSpan());
+    dot.style.setProperty('--gb-dot', style.color);
+    dot.toggleClass('is-none', style.color === 'transparent');
+    return b;
+  }
+
+  popLetterButton(name, label, { letter, icon, bar, active, dropdown }) {
+    const b = this.popButton(name, { icon, label, active, dropdown });
+    if (letter) b.prepend(createSpan({ cls: 'gb-p-letter', text: letter }));
+    if (bar) { b.addClass('has-bar'); b.style.setProperty('--gb-bar', bar === 'transparent' ? 'var(--gb-line)' : bar); }
+    return b;
+  }
+
+  pop_type(st) {
+    const current = cardTypeOf(st.data);
+    const shape = SHAPES.find((s) => s.id === current);
+    const icon = shape ? shape.icon : KIND_ICONS[current] || 'shapes';
+    this.popButton('type', { icon, label: t('popup.type'), chevron: true, dropdown: (panel) => {
+      const pick = (id) => () => this.applyPopup((d) => (d.type === 'text' && !d.gbStroke ? withCardType(d, id) : null), { close: true });
+      const shapes = this.popGroup(panel, t('tool.shape'), 'gb-p-grid-4');
+      for (const s of SHAPES) this.popOption(shapes, { icon: s.icon, label: t(`shape.${s.id}`), active: current === s.id, onClick: pick(s.id) });
+      const other = this.popGroup(panel, '', 'gb-p-list');
+      this.popOption(other, { icon: KIND_ICONS.sticky, text: t('tool.sticky'), active: current === 'sticky', onClick: pick('sticky') });
+      this.popOption(other, { icon: KIND_ICONS.text, text: t('tool.text'), active: current === 'text', onClick: pick('text') });
+    } });
+  }
+
+  pop_fill(st) {
+    const base = { sticky: 'var(--gb-sticky)', shape: 'var(--gb-card)' }[st.kind] || 'transparent';
+    this.popSwatchButton('fill', t('popup.fill'), { color: st.sa.gbFill || base }, (panel) => {
+      panel.createDiv({ cls: 'gb-p-title', text: t('popup.fill') });
+      this.popColors(panel, { value: st.sa.gbFill || null, def: true, none: true, onPick: (c) => this.applyStylePatch({ gbFill: c }) });
+    });
+  }
+
+  pop_border(st) {
+    const hidden = st.sa.border === 'invisible';
+    this.popSwatchButton('border', t('popup.border'), { ring: true, color: hidden ? 'transparent' : st.sa.gbBorder || st.data.color || 'var(--gb-soft)' }, (panel) => {
+      const styles = this.popGroup(panel, t('popup.border'), 'gb-p-grid-4');
+      for (const o of BORDER_OPTIONS) {
+        this.popOption(styles, { icon: o.icon, label: t(`border.${o.id}`), active: (st.sa.border || null) === o.value, onClick: () => this.applyStylePatch({ border: o.value }) });
+      }
+      panel.createDiv({ cls: 'gb-p-title', text: t('popup.color') });
+      this.popColors(panel, { value: st.sa.gbBorder || null, def: true, onPick: (c) => this.applyStylePatch({ gbBorder: c }) });
+    });
+  }
+
+  pop_size(st) {
+    const size = fontSizeOf(st.sa);
+    const set = (v) => this.applyStylePatch({ gbFontSize: v, gbSize: null });
+    const { el } = this.popBar;
+    const box = el.createDiv({ cls: 'gb-p gb-p-size' });
+    const input = box.createEl('input', { attr: { type: 'text', inputmode: 'numeric', 'aria-label': t('popup.size') } });
+    input.value = String(size);
+    this.setTooltip(input, t('popup.size'), 'top');
+    input.addEventListener('pointerdown', (e) => e.stopPropagation());
+    input.addEventListener('focus', () => input.select());
+    input.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') input.blur();
+      if (e.key === 'Escape') { input.value = String(size); input.blur(); }
+    });
+    input.addEventListener('change', () => set(clampFontSize(input.value, size)));
+    const arrows = box.createDiv({ cls: 'gb-p-steps' });
+    const step = (icon, label, dir) => {
+      const b = arrows.createEl('button', { cls: 'clickable-icon' });
+      obsidian.setIcon(b, icon);
+      this.setTooltip(b, label, 'top');
+      b.addEventListener('click', () => set(stepFontSize(size, dir)));
+    };
+    step('chevron-up', t('popup.sizeUp'), 1);
+    step('chevron-down', t('popup.sizeDown'), -1);
+  }
+
+  pop_bold(st) {
+    const on = hasLineMark(st.data.text, '**');
+    this.popButton('bold', { icon: 'bold', label: t('popup.bold'), active: on, onClick: () => this.applyText((x) => setLineMark(x, '**', !on)) });
+  }
+
+  pop_align(st) {
+    const value = st.sa.textAlign || null;
+    const current = ALIGN_OPTIONS.find((o) => o.value === value) || ALIGN_OPTIONS[0];
+    this.popButton('align', { icon: `align-${current.id}`, label: t('popup.align'), dropdown: (panel) => {
+      const grid = this.popGroup(panel, '', 'gb-p-grid-3');
+      for (const o of ALIGN_OPTIONS) {
+        this.popOption(grid, { icon: `align-${o.id}`, label: t(`align.${o.id}`), active: o === current, onClick: () => this.applyStylePatch({ textAlign: o.value }) });
+      }
+    } });
+  }
+
+  pop_list(st) {
+    this.popButton('list', { icon: 'list', label: t('popup.list'), active: hasList(st.data.text), onClick: () => this.applyText(toggleList) });
+  }
+
+  pop_lineHeight(st) {
+    const value = Number.isFinite(st.sa.gbLineHeight) ? st.sa.gbLineHeight : null;
+    this.popLetterButton('lineHeight', t('popup.lineHeight'), { letter: 'A', icon: 'move-vertical', dropdown: (panel) => {
+      const list = this.popGroup(panel, t('popup.lineHeight'), 'gb-p-list');
+      for (const h of LINE_HEIGHTS) {
+        this.popOption(list, { text: h === null ? t('popup.lineHeightDefault') : String(h), active: h === value, onClick: () => this.applyStylePatch({ gbLineHeight: h }) });
+      }
+    } }).addClass('gb-p-lh');
+  }
+
+  pop_textColor(st) {
+    const value = st.sa.gbTextColor || null;
+    const shown = value || (st.kind === 'text' && st.data.color) || (st.kind === 'sticky' ? 'var(--gb-sticky-ink)' : 'var(--gb-ink)');
+    this.popLetterButton('textColor', t('popup.textColor'), { letter: 'A', bar: st.kind === 'sticky' && !value ? '#FFF59A' : shown, dropdown: (panel) => {
+      panel.createDiv({ cls: 'gb-p-title', text: t('popup.textColor') });
+      this.popColors(panel, { value, def: true, onPick: (c) => this.applyStylePatch({ gbTextColor: c }) });
+    } });
+  }
+
+  pop_highlight(st) {
+    const on = hasLineMark(st.data.text, '==');
+    const value = on ? st.sa.gbHighlight || '#FFD54A' : null;
+    this.popLetterButton('highlight', t('popup.highlight'), { icon: 'highlighter', bar: value || 'transparent', dropdown: (panel) => {
+      panel.createDiv({ cls: 'gb-p-title', text: t('popup.highlight') });
+      this.popColors(panel, { value: value || 'transparent', none: true, onPick: (c) => this.applyPopup((d) => {
+        if (d.type !== 'text' || d.gbStroke) return null;
+        const off = c === 'transparent';
+        const next = withStyle(d, { gbHighlight: off ? null : c });
+        next.text = setLineMark(d.text, '==', !off);
+        return next;
+      }) });
+    } });
+  }
+
+  popDataColor(name, label, st, opts) {
+    this.popSwatchButton(name, label, { color: st.data.color || opts.base }, (panel) => {
+      if (opts.before) opts.before(panel);
+      panel.createDiv({ cls: 'gb-p-title', text: t('popup.color') });
+      this.popColors(panel, { value: st.data.color || null, def: opts.def, onPick: (c) => this.applyPopup((d) => {
+        const next = { ...d };
+        if (c) next.color = c; else delete next.color;
+        return next;
+      }) });
+    });
+  }
+
+  pop_inkColor(st) { this.popDataColor('inkColor', t('popup.color'), st, { base: 'var(--gb-red)' }); }
+
+  pop_edgeColor(st) { this.popDataColor('edgeColor', t('popup.color'), st, { base: 'var(--gb-red)', def: true }); }
+
+  pop_inkWidth(st) {
+    const size = st.data.gbStroke.size;
+    this.popButton('inkWidth', { label: t('popup.width'), dropdown: (panel) => {
+      const each = (v) => (d) => (d.gbStroke && isValidStroke(d.gbStroke) ? withStrokeWidth(d, v) : null);
+      this.popSlider(panel, { title: t('popup.width'), min: MARKER_WIDTH.min, max: MARKER_WIDTH.max, value: clampMarkerWidth(size),
+        onInput: (v) => this.applyPopup(each(v), { history: false }), onChange: (v) => this.applyPopup(each(v)) });
+    } }).createSpan({ cls: 'gb-p-thick' }).append(createSpan(), createSpan(), createSpan());
+  }
+
+  pop_edgeLine(st) {
+    const route = EDGE_ROUTES.find((o) => o.value === (st.sa.pathfindingMethod || null)) || EDGE_ROUTES[0];
+    const width = Number.isFinite(st.sa.gbWidth) ? clampEdgeWidth(st.sa.gbWidth) : EDGE_WIDTH.def;
+    this.popButton('edgeLine', { icon: route.icon, label: t('popup.line'), chevron: true, dropdown: (panel) => {
+      const routes = this.popGroup(panel, t('popup.line'), 'gb-p-grid-4');
+      for (const o of EDGE_ROUTES) this.popOption(routes, { icon: o.icon, label: t(`route.${o.id}`), active: o === route, onClick: () => this.applyStylePatch({ pathfindingMethod: o.value }) });
+      const paths = this.popGroup(panel, '', 'gb-p-grid-4');
+      for (const o of EDGE_PATHS) this.popOption(paths, { icon: o.icon, label: t(`path.${o.id}`), active: (st.sa.path || null) === o.value, onClick: () => this.applyStylePatch({ path: o.value }) });
+      const patch = (v) => ({ gbWidth: v === EDGE_WIDTH.def ? null : v });
+      this.popSlider(panel, { title: t('popup.width'), min: EDGE_WIDTH.min, max: EDGE_WIDTH.max, value: width,
+        onInput: (v) => this.applyStylePatch(patch(v), { history: false }), onChange: (v) => this.applyStylePatch(patch(v)) });
+    } });
+  }
+
+  pop_edgeEnds(st) {
+    const from = st.data.fromEnd || 'none', to = st.data.toEnd || 'arrow';
+    const dir = EDGE_DIRECTIONS.find((o) => o.fromEnd === from && o.toEnd === to) || EDGE_DIRECTIONS[1];
+    this.popButton('edgeEnds', { icon: dir.icon, label: t('popup.ends'), chevron: true, dropdown: (panel) => {
+      const dirs = this.popGroup(panel, t('popup.ends'), 'gb-p-grid-4');
+      for (const o of EDGE_DIRECTIONS) {
+        this.popOption(dirs, { icon: o.icon, label: t(`dir.${o.id}`), active: o === dir, onClick: () => this.applyPopup((d) => ({ ...d, fromEnd: o.fromEnd, toEnd: o.toEnd })) });
+      }
+      const heads = this.popGroup(panel, '', 'gb-p-grid-4');
+      for (const o of EDGE_HEADS) this.popOption(heads, { icon: o.icon, label: t(`head.${o.id}`), active: (st.sa.arrow || null) === o.value, onClick: () => this.applyStylePatch({ arrow: o.value }) });
+    } });
+  }
+
+  pop_filter(st) {
+    const b = this.popButton('filter', { label: t('popup.filter'), chevron: true, dropdown: (panel) => {
+      const list = this.popGroup(panel, '', 'gb-p-list');
+      for (const g of st.groups) {
+        this.popOption(list, { icon: KIND_ICONS[g.kind], text: t(`kind.${g.kind}`), count: g.count, onClick: () => this.filterSelection(g.kind, st) });
+      }
+    } });
+    const text = createDiv({ cls: 'gb-p-filter' });
+    text.createDiv({ cls: 'gb-p-filter-title', text: t('popup.filter') });
+    text.createDiv({ text: objectsLabel(st.items.length) });
+    b.prepend(text);
+  }
+
+  filterSelection(kind, st) {
+    const keep = new Set(st.items.filter((_, i) => st.kinds[i] === kind));
+    this.popOpen = null;
+    this.canvas.updateSelection(() => { this.canvas.selection = keep; });
+    this.renderPopup(true);
   }
 
   openContextMenu(anchor) {
@@ -1970,7 +2707,7 @@ class CultCanvasPlugin extends obsidian.Plugin {
       if (board(canvas)) board(canvas).scheduleStyleCheck();
     });
     on('advanced-canvas:edge-changed', (canvas, edge) => this.onEdgeChanged(canvas, edge));
-    on('advanced-canvas:edge-added', (canvas, edge) => this.patchEdgeProto(edge));
+    on('advanced-canvas:edge-added', (canvas, edge) => { this.patchEdgeProto(edge); this.decorateEdge(edge); });
     on('advanced-canvas:node-added', (canvas, node) => { if (board(canvas)) this.decorate(node); });
     // New elements get the last style of their kind once their creator has finished filling them in.
     on('advanced-canvas:node-created', (canvas, node) => {
@@ -1984,7 +2721,7 @@ class CultCanvasPlugin extends obsidian.Plugin {
     on('canvas:node-menu', (menu, node) => { const b = node && board(node.canvas); if (b) b.decorateMenu(menu, 'node'); });
     on('canvas:edge-menu', (menu, edge) => { const b = edge && board(edge.canvas); if (b) b.decorateMenu(menu, 'edge'); });
     on('canvas:selection-menu', (menu, canvas) => { if (board(canvas)) board(canvas).decorateMenu(menu, 'selection'); });
-    on('advanced-canvas:popup-menu-created', (canvas) => { if (board(canvas)) board(canvas).addMoreButton(); });
+    on('advanced-canvas:popup-menu-created', (canvas) => { if (board(canvas)) board(canvas).renderPopup(); });
     // The text editor of a card is an iframe: give it the board font and the card colour,
     // so the text looks the same while editing as after it (the rest is in styles.css).
     on('advanced-canvas:node-editing-state-changed', (canvas, node, editing) => { if (editing && this.boards.has(canvas)) void this.styleEditor(node); });
@@ -2179,9 +2916,19 @@ class CultCanvasPlugin extends obsidian.Plugin {
     }
   }
 
+  // The line thickness chosen in the popup (styles.css reads the variable).
+  decorateEdge(edge) {
+    const el = edge && edge.lineGroupEl;
+    if (!el) return;
+    const w = ((edge.unknownData || {}).styleAttributes || {}).gbWidth;
+    if (Number.isFinite(w)) el.style.setProperty('--gb-edge-width', `${clampEdgeWidth(w)}px`);
+    else el.style.removeProperty('--gb-edge-width');
+  }
+
   // Advanced Canvas redraws an arrow with a pathfinding method after updatePath, over the route: draw it again.
   onEdgeChanged(canvas, edge) {
     this.patchEdgeProto(edge);
+    this.decorateEdge(edge);
     const b = this.boards.get(canvas);
     if (b) { b.scheduleStyleCheck(); b.requestRender(); }
     // Canvas and Advanced Canvas redraw only a dirty or selected arrow; undo or a script changing the points or the
@@ -2281,6 +3028,7 @@ class CultCanvasPlugin extends obsidian.Plugin {
     const color = themed ? getComputedStyle(node.nodeEl).getPropertyValue('--canvas-color').trim() : '';
     if (color) body.style.setProperty('--canvas-color', color);
     else body.style.removeProperty('--canvas-color');
+    applyNodeVars(body, node.getData().styleAttributes || {});
     doc.documentElement.addClass('gb-editor-root');
     body.addClass('gb-editor');
   }
@@ -2401,6 +3149,7 @@ class CultCanvasPlugin extends obsidian.Plugin {
     }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.code === 'Escape') {
+      if (b.popOpen) { b.closeDropdown(); e.preventDefault(); e.stopPropagation(); return; }
       if (b.bend) { b.cancelBend(); e.preventDefault(); e.stopPropagation(); return; }
       if (b.gesture || b.tool !== 'select') { b.setTool('select'); e.preventDefault(); e.stopPropagation(); }
       return;
@@ -2430,6 +3179,7 @@ class CultCanvasPlugin extends obsidian.Plugin {
     const el = node && node.nodeEl;
     if (!el) return;
     this.patchNodeZ(node);
+    applyNodeVars(el, styleOf(node));
     const s = strokeOf(node);
     const container = el.querySelector(':scope > .canvas-node-container');
     if (!s || !container) {

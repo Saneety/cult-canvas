@@ -290,7 +290,7 @@ test('dragging with Alt copies, with Ctrl turns snapping off (keys swapped for C
 test('found in live tests: a new arrow is redrawn with its style, menu copy focuses the canvas', () => {
   const src = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
   // Advanced Canvas redraws an arrow path only while the arrow is dirty or selected
-  assert.ok(/applyDefaultStyle\(item\)[\s\S]*?item\.setData\(next\);[\s\S]{0,200}markDirty\(item\)/.test(src), 'markDirty after setData');
+  assert.ok(/applyDefaultStyle\(item, preview = false\)[\s\S]*?item\.setData\(next\);[\s\S]{0,200}markDirty\(item\)/.test(src), 'markDirty after setData');
   // core Canvas copies only while its wrapper has focus; the menu takes the focus away
   assert.ok(/copySelection\(\)\s*\{[\s\S]{0,200}wrapperEl\.focus\(\)[\s\S]{0,300}\.copy\(\)/.test(src), 'focus before copy');
 });
@@ -573,6 +573,124 @@ test('the release workflow tests, attests and publishes main.js, manifest.json a
   const attest = wf.match(/uses: actions\/attest@v\d+\s+with:\s+subject-path: \|\s+([\s\S]*?)\n\s*\n/);
   assert.ok(attest && files.every((f) => attest[1].includes(f)), 'attested files');
   assert.ok(/gh release create[\s\S]*main\.js manifest\.json styles\.css/.test(wf), 'released files');
+});
+
+const {
+  popupKindOf, selectionKinds, objectsLabel, POPUP_CONTROLS, clampFontSize, fontSizeOf, stepFontSize, withStyle, withCardType, cardTypeOf,
+  hasLineMark, setLineMark, hasList, toggleList, withStrokeWidth, nodeStyleVars, clampEdgeWidth,
+} = logic;
+
+test('marker: with Shift the line is straight from where Shift took effect', () => {
+  const { addStrokePoint } = logic;
+  const held = [[0, 0]];
+  let from = null;
+  for (const p of [[5, 9], [7, 1], [20, 20]]) from = addStrokePoint(held, p, true, from);
+  assert.deepStrictEqual(held, [[0, 0], [20, 20]]);
+  const mid = [[0, 0]];
+  from = addStrokePoint(mid, [1, 5], false, null);
+  assert.strictEqual(from, null);
+  from = addStrokePoint(mid, [3, 3], true, from);
+  from = addStrokePoint(mid, [9, 0], true, from);
+  assert.deepStrictEqual(mid, [[0, 0], [1, 5], [9, 0]]);
+  from = addStrokePoint(mid, [9, 4], false, from);
+  assert.strictEqual(from, null);
+  assert.deepStrictEqual(mid, [[0, 0], [1, 5], [9, 0], [9, 4]]);
+});
+
+test('popup: every object gets its kind, a selection counts them', () => {
+  const kind = (d) => popupKindOf({ type: 'text', ...d }, false);
+  assert.strictEqual(kind({}), 'shape');
+  assert.strictEqual(kind({ styleAttributes: { shape: 'diamond' } }), 'shape');
+  assert.strictEqual(kind({ styleAttributes: { gbKind: 'sticky' } }), 'sticky');
+  assert.strictEqual(kind({ styleAttributes: { gbKind: 'text' } }), 'text');
+  assert.strictEqual(kind({ gbStroke: {} }), 'stroke');
+  assert.strictEqual(popupKindOf({ type: 'group' }, false), 'frame');
+  assert.strictEqual(popupKindOf({ type: 'file', file: 'a/b.PNG' }, false), 'image');
+  assert.strictEqual(popupKindOf({ type: 'file', file: 'a/b.md' }, false), 'note');
+  assert.strictEqual(popupKindOf({ type: 'link' }, false), 'link');
+  assert.strictEqual(popupKindOf({}, true), 'edge');
+  assert.deepStrictEqual(selectionKinds(['text', 'frame', 'text', null, 'sticky', 'text', 'sticky']),
+    [{ kind: 'text', count: 3 }, { kind: 'sticky', count: 2 }, { kind: 'frame', count: 1 }]);
+});
+
+test('popup: the object count is declined in Russian', () => {
+  setLanguage('ru');
+  const forms = [1, 2, 5, 11, 12, 21, 22, 25, 111].map(objectsLabel);
+  setLanguage('en');
+  assert.deepStrictEqual(forms, ['1 объект', '2 объекта', '5 объектов', '11 объектов', '12 объектов', '21 объект', '22 объекта', '25 объектов', '111 объектов']);
+  assert.strictEqual(objectsLabel(1), '1 object');
+  assert.strictEqual(objectsLabel(3), '3 objects');
+});
+
+test('popup: every control has its builder and every kind its name and label', () => {
+  const src = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8');
+  for (const [kind, controls] of Object.entries(POPUP_CONTROLS)) {
+    for (const c of controls) if (c !== '|') assert.ok(src.includes(`  pop_${c}(st)`), `pop_${c}`);
+    if (kind !== 'mixed') for (const lang of ['en', 'ru']) assert.ok(STRINGS[lang][`kind.${kind}`], `${lang} kind.${kind}`);
+  }
+});
+
+test('popup: text size reads the old S/L/XL field and steps through the presets', () => {
+  assert.strictEqual(fontSizeOf({}), 18);
+  assert.strictEqual(fontSizeOf({ gbSize: 'xl' }), 38);
+  assert.strictEqual(fontSizeOf({ gbSize: 'xl', gbFontSize: 21 }), 21);
+  assert.strictEqual(stepFontSize(18, 1), 20);
+  assert.strictEqual(stepFontSize(18, -1), 16);
+  assert.strictEqual(stepFontSize(19, 1), 20);
+  assert.strictEqual(stepFontSize(19, -1), 18);
+  assert.strictEqual(stepFontSize(128, 1), 128);
+  assert.strictEqual(clampFontSize('1000'), 200);
+  assert.strictEqual(clampFontSize('2'), 8);
+  assert.strictEqual(clampFontSize('abc', 30), 30);
+});
+
+test('popup: bold and highlight wrap each line and keep its list or heading mark', () => {
+  assert.strictEqual(setLineMark('one\n\n- two\n# three', '**', true), '**one**\n\n- **two**\n# **three**');
+  assert.ok(hasLineMark('**one**\n\n- **two**', '**'));
+  assert.ok(!hasLineMark('**one**\ntwo', '**'));
+  assert.ok(!hasLineMark('', '**'));
+  const both = setLineMark(setLineMark('one', '**', true), '==', true);
+  assert.strictEqual(both, '==**one**==');
+  assert.ok(hasLineMark(both, '**') && hasLineMark(both, '=='));
+  assert.strictEqual(setLineMark(both, '==', false), '**one**');
+  assert.strictEqual(setLineMark(setLineMark(both, '==', false), '**', false), 'one');
+});
+
+test('popup: the list button turns all lines on, then all off', () => {
+  assert.strictEqual(toggleList('a\n\n- b'), '- a\n\n- b');
+  assert.ok(hasList('- a\n\n- b'));
+  assert.strictEqual(toggleList('- a\n\n- b'), 'a\n\nb');
+  assert.ok(!hasList('a'));
+});
+
+test('popup: the card type keeps the rest of the style', () => {
+  const d = { type: 'text', text: 'x', styleAttributes: { gbFill: '#111111' } };
+  const dia = withCardType(d, 'diamond');
+  assert.strictEqual(cardTypeOf(dia), 'diamond');
+  assert.strictEqual(dia.styleAttributes.gbFill, '#111111');
+  assert.strictEqual(dia.styleAttributes.textAlign, 'center');
+  const sticky = withCardType(dia, 'sticky');
+  assert.strictEqual(cardTypeOf(sticky), 'sticky');
+  assert.strictEqual(sticky.styleAttributes.shape, undefined);
+  assert.strictEqual(cardTypeOf({ type: 'text' }), 'rect');
+  assert.deepStrictEqual(withStyle({ styleAttributes: { a: 1 } }, { a: null }), {});
+});
+
+test('popup: another marker width leaves the line where it is', () => {
+  const made = { id: 'm', ...buildStrokeNode([[100, 50], [150, 80], [200, 50]], 6) };
+  const at = (n) => n.gbStroke.points.map(([x, y]) => [Math.round(n.x + x), Math.round(n.y + y)]);
+  const wide = withStrokeWidth(made, 20);
+  assert.strictEqual(wide.id, 'm');
+  assert.strictEqual(wide.gbStroke.size, 20);
+  assert.deepStrictEqual(at(wide), at(made));
+});
+
+test('popup: only valid values reach the card styles', () => {
+  assert.deepStrictEqual(nodeStyleVars({ gbFill: '#ff0000', gbBorder: 'url(x)', gbFontSize: 20, gbLineHeight: 99 }),
+    { '--gb-node-fill': '#ff0000', '--gb-font-size': '20px' });
+  assert.deepStrictEqual(nodeStyleVars({ gbTextColor: 'transparent' }), { '--text-normal': 'transparent' });
+  assert.strictEqual(clampEdgeWidth(99), 12);
+  assert.strictEqual(clampEdgeWidth('x'), 3);
 });
 
 // The cheapest part of the community plugin review (eslint-plugin-obsidianmd), for the plugin's own code: the

@@ -9,7 +9,7 @@ Everything the plugin does, in detail. The short version is in the [README](../R
 - [Selection, copies, layers](#selection-copies-layers)
 - [Last style becomes the default](#last-style-becomes-the-default)
 - [Context menu](#context-menu)
-- [Card popup](#card-popup)
+- [Popup over the selection](#popup-over-the-selection)
 - [Links to notes](#links-to-notes)
 - [Settings](#settings)
 - [Format for scripts and agents](#format-for-scripts-and-agents)
@@ -40,7 +40,7 @@ The toolbar is on the left of every canvas. Hotkeys work while the cursor is not
 | S | Sticky note | click for a 220x220 note, drag for your own size; typing starts at once |
 | T | Text | text without a border |
 | R | Shape | rectangle, oval, diamond, circle, parallelogram, document, database (pick it in the panel) |
-| P | Marker | freehand lines; the panel has a width slider (1-30 px), 5 colors and your own colors; a line keeps one width along its length however fast you move |
+| P | Marker | freehand lines; the panel has a width slider (1-30 px), 5 colors and your own colors; a line keeps one width along its length however fast you move; with Shift held the line is straight |
 | E | Eraser | erases the marker lines you drag over |
 | F | Frame | a section with a title (a Canvas group) |
 | I | Insert | an image from your computer, an image or a note from the vault |
@@ -109,15 +109,23 @@ The arrow keeps its line shape from the Advanced Canvas popup: a curve goes smoo
 of an arrow (dragging, arrow keys), its points move with them; copies, Ctrl+D and paste keep them too. Each
 drag is one Ctrl+Z step.
 
-## Card popup
+A selected arrow also has round handles on its two ends: drag one to another card to reconnect the arrow.
+Dropped on the empty board, the end goes back. A new arrow shows its line shape while you drag it out.
 
-A selected card has the Advanced Canvas buttons above it and two of Cult Canvas:
+## Popup over the selection
 
-- "Card type": card, sticky note, text without border;
-- "Text size": S, M, L, XL.
+The bar above the selection shows what fits the selected objects, and the chosen option in its lists is blue:
 
-The color from the standard button paints a sticky note, borderless text, a shape's border and a marker
-line.
+- shape and sticky note: type, fill, border (shape), text size, bold, alignment, list, line spacing, text
+  color, highlight;
+- text: the same without the border, fill at the end;
+- marker line: color and thickness;
+- arrow: color, line (shape, dashes, thickness), ends (direction and arrowhead);
+- frame: fill and border; image, note and web page: border.
+
+Bold, highlight and list change the whole card and are written as Markdown in its text. "..." opens the
+context menu. When objects of different kinds are selected, the bar shows "Filter": pick a kind in the list to
+keep only those objects selected.
 
 ## Links to notes
 
@@ -128,8 +136,7 @@ first enable Advanced Canvas, so links in canvases reach backlinks and the graph
 
 ## Settings
 
-**Language**: English (default) or Russian, for the toolbar, the menus, the notices and the commands. The
-two card popup buttons stay in English, as do the other buttons of the Advanced Canvas popup.
+**Language**: English (default) or Russian, for the toolbar, the menus, the notices and the commands.
 
 ## Format for scripts and agents
 
@@ -142,7 +149,10 @@ edit of the file on disk even while the board is open. New ids are 16 hex charac
 | Card | `{"type":"text","text":"...","x","y","width","height"}` |
 | Sticky note | the same + `"styleAttributes":{"gbKind":"sticky"}` |
 | Text without border | `"styleAttributes":{"gbKind":"text"}` |
-| Text size | `"gbSize":"s"`, `"l"` or `"xl"` in `styleAttributes` (no field - M) |
+| Text size | `"gbFontSize":24` (pixels, 8-200) in `styleAttributes`; older boards: `"gbSize":"s"`, `"l"` or `"xl"`; no field - 18 |
+| Card colors | `"gbFill"`, `"gbBorder"`, `"gbTextColor"`, `"gbHighlight"` in `styleAttributes`: `"#RRGGBB"` (`"transparent"` for no fill) |
+| Line spacing | `"gbLineHeight":1.5` in `styleAttributes` |
+| Arrow thickness | `"gbWidth":5` (pixels, 1-12) in the `styleAttributes` of the edge |
 | Shape | `"styleAttributes":{"shape":"diamond","textAlign":"center"}`; shapes: `pill`, `diamond`, `circle`, `parallelogram`, `document`, `database`, `predefined-process`; no `shape` - rectangle |
 | Frame | `{"type":"group","label":"Act 1","x","y","width","height"}`; cards belong to it by their coordinates |
 | Note, image | `{"type":"file","file":"path/in/vault.md", ...}` |
