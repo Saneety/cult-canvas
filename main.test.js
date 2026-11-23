@@ -686,11 +686,98 @@ test('popup: another marker width leaves the line where it is', () => {
 });
 
 test('popup: only valid values reach the card styles', () => {
-  assert.deepStrictEqual(nodeStyleVars({ gbFill: '#ff0000', gbBorder: 'url(x)', gbFontSize: 20, gbLineHeight: 99 }),
-    { '--gb-node-fill': '#ff0000', '--gb-font-size': '20px' });
+  assert.deepStrictEqual(nodeStyleVars({ gbFill: 'transparent', gbBorder: 'url(x)', gbFontSize: 20, gbLineHeight: 99 }),
+    { '--gb-node-fill': 'transparent', '--gb-font-size': '20px' });
   assert.deepStrictEqual(nodeStyleVars({ gbTextColor: 'transparent' }), { '--text-normal': 'transparent' });
   assert.strictEqual(clampEdgeWidth(99), 12);
   assert.strictEqual(clampEdgeWidth('x'), 3);
+});
+
+const { contrastRatio, inkFor, inkVars, withFill, INK_VARS, MIN_TEXT_CONTRAST, isBlankText, historyWithoutBlank, NODE_STYLE_VARS } = logic;
+
+test('fill: the text turns dark on a light fill and light on a dark one', () => {
+  assert.strictEqual(Math.round(contrastRatio('#000000', '#FFFFFF')), 21);
+  assert.strictEqual(contrastRatio('#123', '#112233'), 1);
+  assert.strictEqual(contrastRatio('transparent', '#FFFFFF'), null);
+  for (const light of ['#7CE8A6', '#FFD54A', '#FFFFFF', '#5DB2FF', '#FF5A3D', '#FFF59A']) assert.strictEqual(inkFor(light), 'dark', light);
+  for (const dark of ['#1F2126', '#30333A', '#000000', '#1D3A8A']) assert.strictEqual(inkFor(dark), 'light', dark);
+  assert.strictEqual(inkFor('#7CE8A600'), 'light', 'a see-through fill shows the dark board');
+  assert.strictEqual(inkFor('transparent'), null);
+  assert.strictEqual(inkFor(undefined), null);
+  // whichever ink is picked reads on its fill: well on the popup colours, enough on the worst grey
+  for (const fill of ['#FFFFFF', '#EDEDED', '#A3A6AD', '#1F2126', '#FF5A3D', '#FFB03A', '#FFD54A', '#7CE8A6', '#5DB2FF', '#B48CFF', '#777777', '#808080']) {
+    const ink = inkVars(fill);
+    const grey = fill === '#777777' || fill === '#808080';
+    assert.ok(contrastRatio(ink['--text-normal'], fill) >= (grey ? 3.5 : 4.5), `text on ${fill}`);
+    assert.ok(contrastRatio(ink['--link-color'], fill) >= MIN_TEXT_CONTRAST, `links on ${fill}`);
+  }
+  for (const ink of Object.values(INK_VARS)) for (const name of Object.keys(ink)) assert.ok(NODE_STYLE_VARS.includes(name), name);
+});
+
+test('fill: the card styles carry the automatic text colour, a text colour of one\'s own wins', () => {
+  const green = nodeStyleVars({ gbFill: '#7CE8A6' });
+  assert.strictEqual(green['--gb-node-fill'], '#7CE8A6');
+  assert.strictEqual(green['--text-normal'], INK_VARS.dark['--text-normal']);
+  assert.strictEqual(green['--link-color'], INK_VARS.dark['--link-color']);
+  const own = nodeStyleVars({ gbFill: '#7CE8A6', gbTextColor: '#FF5A3D' });
+  assert.strictEqual(own['--text-normal'], '#FF5A3D');
+  assert.strictEqual(own['--link-color'], INK_VARS.dark['--link-color']);
+  // free text coloured from the card menu keeps that colour, arrows' ends and frames get no text colours
+  assert.strictEqual(nodeStyleVars({ gbKind: 'text', gbFill: '#7CE8A6' }, { type: 'text', color: '4' })['--text-normal'], undefined);
+  assert.deepStrictEqual(nodeStyleVars({ gbFill: '#7CE8A6' }, { type: 'group' }), { '--gb-node-fill': '#7CE8A6' });
+  assert.strictEqual(nodeStyleVars({}, { type: 'text' })['--text-normal'], undefined);
+});
+
+test('fill: a new fill drops a text colour of one\'s own only when the text stops reading', () => {
+  const card = (sa) => ({ id: 'a', type: 'text', text: 'x', styleAttributes: sa });
+  const white = card({ gbTextColor: '#FFFFFF' });
+  assert.deepStrictEqual(withFill(white, '#7CE8A6').styleAttributes, { gbFill: '#7CE8A6' });
+  assert.deepStrictEqual(withFill(white, '#1F2126').styleAttributes, { gbTextColor: '#FFFFFF', gbFill: '#1F2126' });
+  const dark = card({ gbTextColor: '#1F2126', gbFill: '#7CE8A6' });
+  assert.deepStrictEqual(withFill(dark, '#FFD54A').styleAttributes, { gbTextColor: '#1F2126', gbFill: '#FFD54A' });
+  assert.strictEqual(withFill(dark, null).styleAttributes, undefined, 'back to the dark default card');
+  assert.deepStrictEqual(withFill(dark, 'transparent').styleAttributes, { gbFill: 'transparent' }, 'on the dark board');
+  assert.deepStrictEqual(withFill(card({ gbKind: 'sticky', gbTextColor: '#1F2126', gbFill: '#30333A' }), null).styleAttributes,
+    { gbKind: 'sticky', gbTextColor: '#1F2126' }, 'the yellow sticky');
+  const tinted = { ...card({ gbTextColor: '#FFFFFF', gbFill: '#30333A' }), color: '4' };
+  assert.deepStrictEqual(withFill(tinted, null).styleAttributes, { gbTextColor: '#FFFFFF' }, 'a card menu colour: unknown, kept');
+  assert.deepStrictEqual(withFill({ type: 'group' }, '#7CE8A6'), { type: 'group', styleAttributes: { gbFill: '#7CE8A6' } });
+});
+
+test('empty text: only a borderless text card with no text counts', () => {
+  const text = (t, sa = { gbKind: 'text' }) => ({ id: 'a', type: 'text', text: t, styleAttributes: sa });
+  assert.ok(isBlankText(text('')));
+  assert.ok(isBlankText(text(' \n\t ')));
+  assert.ok(isBlankText({ id: 'a', type: 'text', styleAttributes: { gbKind: 'text', gbFill: '#FFFFFF' } }));
+  assert.ok(!isBlankText(text('x')));
+  assert.ok(!isBlankText(text('', { gbKind: 'sticky' })));
+  assert.ok(!isBlankText(text('', { shape: 'diamond' })));
+  assert.ok(!isBlankText({ id: 'a', type: 'text', text: '' }), 'a card');
+  assert.ok(!isBlankText({ ...text(''), gbStroke: {} }), 'a marker line');
+  assert.ok(!isBlankText({ id: 'a', type: 'group', styleAttributes: { gbKind: 'text' } }));
+});
+
+test('empty text: the undo history forgets the removed card', () => {
+  const other = { id: 'o', type: 'text', text: 'keep' };
+  const blank = { id: 'b', type: 'text', text: '', styleAttributes: { gbKind: 'text' } };
+  const s0 = { nodes: [other], edges: [] };
+  const s1 = { nodes: [other, blank], edges: [] };
+  // made and left empty: the step that made it goes
+  let r = historyWithoutBlank([s0, s1], 1, 'b');
+  assert.deepStrictEqual(r, { entries: [s0], current: 0 });
+  // typed, then erased: the state with the text stays for undo
+  const typed = { nodes: [other, { ...blank, text: 'hi' }], edges: [] };
+  r = historyWithoutBlank([s0, s1, typed, s1], 3, 'b');
+  assert.deepStrictEqual(r, { entries: [s0, typed, s0], current: 2 });
+  // redo steps after the present one are cleaned the same way and the present index follows
+  const moved = { nodes: [{ ...other, x: 5 }], edges: [] };
+  r = historyWithoutBlank([s0, s1, moved], 1, 'b');
+  assert.deepStrictEqual(r, { entries: [s0, moved], current: 0 });
+  // a blank card that was an arrow end in a state stays in that state
+  const linked = { nodes: [other, blank], edges: [{ id: 'e', fromNode: 'o', toNode: 'b' }] };
+  r = historyWithoutBlank([s0, linked, s1], 2, 'b');
+  assert.deepStrictEqual(r, { entries: [s0, linked, s0], current: 2 });
+  assert.strictEqual(r.entries[0], s0, 'untouched states are the same objects');
 });
 
 // The cheapest part of the community plugin review (eslint-plugin-obsidianmd), for the plugin's own code: the

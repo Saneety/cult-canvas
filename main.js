@@ -919,19 +919,126 @@ function withStrokeWidth(data, size) {
 
 const isCssColor = (v) => v === 'transparent' || /^#[0-9a-f]{3,8}$/i.test(String(v));
 
-// What the style attributes of the popup set on a card: CSS variables, read by styles.css.
-function nodeStyleVars(sa) {
+// The backgrounds of styles.css (--gb-bg, --gb-card, --gb-sticky).
+const BOARD_BACKGROUND = '#26282C';
+const CARD_BACKGROUND = '#30333A';
+const STICKY_BACKGROUND = '#FFF59A';
+// Below this contrast a text colour of one's own gives way to the automatic one when the fill changes.
+const MIN_TEXT_CONTRAST = 3;
+// The text colours that read on a fill: dark on a light fill (the darkest popup colour), light on a dark one (the
+// board's own colours). Links and the muted text follow, so a [[link]] reads too.
+const INK_VARS = {
+  dark: { '--text-normal': '#1F2126', '--text-muted': '#3B3E45', '--text-faint': '#55585F', '--link-color': '#0B2C5C', '--link-color-hover': '#05162E', '--link-unresolved-color': '#0B2C5C' },
+  light: { '--text-normal': '#EDEDED', '--text-muted': '#A3A6AD', '--text-faint': '#7D818A', '--link-color': '#5DB2FF', '--link-color-hover': '#8CC9FF', '--link-unresolved-color': '#5DB2FF' },
+};
+
+// '#RGB', '#RGBA', '#RRGGBB' or '#RRGGBBAA' as [r, g, b] (0-255), a see-through colour laid over the board
+// background; null for anything else ('transparent', a palette number).
+function solidRgb(v) {
+  const m = typeof v === 'string' && v.trim().match(/^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i);
+  if (!m) return null;
+  const h = m[1].length <= 4 ? m[1].split('').map((ch) => ch + ch).join('') : m[1];
+  const [r, g, b, a = 255] = h.match(/../g).map((x) => parseInt(x, 16));
+  const under = solidRgb.board || (solidRgb.board = BOARD_BACKGROUND.match(/[0-9a-f]{2}/gi).map((x) => parseInt(x, 16)));
+  return [r, g, b].map((c, i) => c * (a / 255) + under[i] * (1 - a / 255));
+}
+
+// WCAG 2 contrast ratio of two colours (1-21); null when one of them is not a hex colour.
+function contrastRatio(a, b) {
+  const lum = (rgb) => {
+    const [r, g, bl] = rgb.map((c) => { const s = c / 255; return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * bl;
+  };
+  const x = solidRgb(a), y = solidRgb(b);
+  if (!x || !y) return null;
+  const l1 = lum(x), l2 = lum(y);
+  return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+}
+
+// 'dark' or 'light': the text that reads best on a fill; null when the fill is not a colour of its own.
+function inkFor(fill) {
+  if (!solidRgb(fill)) return null;
+  return contrastRatio(INK_VARS.dark['--text-normal'], fill) >= contrastRatio(INK_VARS.light['--text-normal'], fill) ? 'dark' : 'light';
+}
+
+// The text colours for a fill; on a middle tone, where the link colour would not read, links take the text colour
+// (they stay underlined).
+function inkVars(fill) {
+  const ink = inkFor(fill);
+  if (!ink) return null;
+  const vars = { ...INK_VARS[ink] };
+  if (contrastRatio(vars['--link-color'], fill) < MIN_TEXT_CONTRAST) {
+    for (const name of ['--link-color', '--link-color-hover', '--link-unresolved-color']) vars[name] = vars['--text-normal'];
+  }
+  return vars;
+}
+
+// What is under the text of a card with this fill (null: the fill itself, or unknown - a card menu colour tints it).
+function backgroundOf(data, fill) {
+  const kind = (data.styleAttributes || {}).gbKind;
+  if (fill === 'transparent') return BOARD_BACKGROUND;
+  if (fill) return solidRgb(fill) ? fill : null;
+  if (data.color && kind !== 'text') return null;
+  return kind === 'sticky' ? STICKY_BACKGROUND : kind === 'text' ? BOARD_BACKGROUND : CARD_BACKGROUND;
+}
+
+// A new fill keeps a text colour of one's own while the text still reads on it; otherwise the text colour goes back
+// to the automatic one, which reads on the fill by itself (nodeStyleVars).
+function withFill(data, fill) {
+  const patch = { gbFill: fill };
+  const own = (data.styleAttributes || {}).gbTextColor;
+  const under = own ? backgroundOf(data, fill) : null;
+  const ratio = under ? contrastRatio(own, under) : null;
+  if (ratio !== null && ratio < MIN_TEXT_CONTRAST) patch.gbTextColor = null;
+  return withStyle(data, patch);
+}
+
+// What the style attributes of the popup set on a card: CSS variables, read by styles.css. node: the card's type and
+// colour; on a text card with a fill of its own the text takes the colours that read on it, except a text colour
+// picked by hand (for free text the card menu colour is its text colour).
+function nodeStyleVars(sa, node = { type: 'text' }) {
   const s = sa || {};
   const vars = {};
   if (isCssColor(s.gbFill)) vars['--gb-node-fill'] = s.gbFill;
   if (isCssColor(s.gbBorder)) vars['--gb-node-border'] = s.gbBorder;
+  const ink = node && node.type === 'text' && !node.gbStroke ? inkVars(s.gbFill) : null;
+  if (ink) {
+    const ownText = s.gbKind === 'text' && !!node.color;
+    for (const [name, value] of Object.entries(ink)) if (!(ownText && name === '--text-normal')) vars[name] = value;
+  }
   if (isCssColor(s.gbTextColor)) vars['--text-normal'] = s.gbTextColor;
   if (isCssColor(s.gbHighlight)) vars['--text-highlight-bg'] = s.gbHighlight;
   if (Number.isFinite(s.gbFontSize)) vars['--gb-font-size'] = `${clampFontSize(s.gbFontSize)}px`;
   if (Number.isFinite(s.gbLineHeight) && s.gbLineHeight >= 0.8 && s.gbLineHeight <= 3) vars['--line-height-normal'] = String(s.gbLineHeight);
   return vars;
 }
-const NODE_STYLE_VARS = ['--gb-node-fill', '--gb-node-border', '--text-normal', '--text-highlight-bg', '--gb-font-size', '--line-height-normal'];
+const NODE_STYLE_VARS = ['--gb-node-fill', '--gb-node-border', '--text-normal', '--text-muted', '--text-faint', '--link-color', '--link-color-hover',
+  '--link-unresolved-color', '--text-highlight-bg', '--gb-font-size', '--line-height-normal'];
+
+// A borderless text card with nothing in it: it is removed once it is deselected (Board.checkBlankText).
+function isBlankText(data) {
+  if (!data || data.type !== 'text' || data.gbStroke) return false;
+  return (data.styleAttributes || {}).gbKind === 'text' && !String(data.text || '').trim();
+}
+
+// The undo history after the blank text card `id` is removed: the states where it was blank (and had no arrows)
+// lose it, and a state equal to the one before it goes, so undo never brings the empty card back.
+// current: the index of the present state; returns the new list and that index in it.
+function historyWithoutBlank(entries, current, id) {
+  const out = [];
+  let at = 0;
+  let prev = null;
+  entries.forEach((entry, i) => {
+    const nodes = entry && Array.isArray(entry.nodes) ? entry.nodes : null;
+    const node = nodes && nodes.find((n) => n && n.id === id);
+    const linked = !!node && (entry.edges || []).some((e) => e && (e.fromNode === id || e.toNode === id));
+    const next = node && isBlankText(node) && !linked ? { ...entry, nodes: nodes.filter((n) => n !== node) } : entry;
+    const key = JSON.stringify(next);
+    if (key !== prev) { out.push(next); prev = key; }
+    if (i === current) at = out.length - 1;
+  });
+  return { entries: out, current: at };
+}
 
 function clampEdgeWidth(v) {
   const n = Math.round(Number(v));
@@ -941,6 +1048,7 @@ function clampEdgeWidth(v) {
 const logic = {
   addStrokePoint, popupKindOf, selectionKinds, objectsLabel, POPUP_CONTROLS, clampFontSize, fontSizeOf, stepFontSize, withStyle, withCardType, cardTypeOf,
   hasLineMark, setLineMark, hasList, toggleList, withStrokeWidth, nodeStyleVars, NODE_STYLE_VARS, clampEdgeWidth,
+  contrastRatio, inkFor, inkVars, withFill, INK_VARS, MIN_TEXT_CONTRAST, isBlankText, historyWithoutBlank,
   advancedCanvasState, advancedCanvasPageUrl, MARKER_COLORS, MARKER_WIDTH, TOOLS, SHAPES, OVERLAY_TOOLS, ONE_SHOT_TOOLS, clampMarkerWidth,
   dedupePoints, buildStrokeNode, isValidStroke, distToSegment, strokeDistance, strokeHit, samplePath,
   getSvgPathFromStroke, strokeOutlinePoints, strokeOutlinePath, centerlinePath, dragRect, centeredRect, unionBounds,
@@ -1002,9 +1110,9 @@ function drawBends(edge) {
   edge.center = route.center; // Advanced Canvas puts the label here (advanced-canvas:edge-center-requested)
 }
 
-// Puts the popup's style of a card on its element (or on the body of its text editor).
-function applyNodeVars(el, styleAttributes) {
-  const vars = styleAttributes ? nodeStyleVars(styleAttributes) : {};
+// Puts the popup's style of a card on its element (or on the body of its text editor). data: the card's data.
+function applyNodeVars(el, styleAttributes, data) {
+  const vars = styleAttributes ? nodeStyleVars(styleAttributes, data) : {};
   for (const name of NODE_STYLE_VARS) {
     if (name in vars) el.style.setProperty(name, vars[name]); else el.style.removeProperty(name);
   }
@@ -1070,6 +1178,7 @@ class Board {
     this.restorers = [];
     this.importing = 0;
     this.styleSnaps = new Map();
+    this.lastSelection = new Set(this.canvas.selection); // to see which cards a selection change left
     this.bend = null; // a bend point being dragged
     this.build();
     this.patchHitTest();
@@ -2021,7 +2130,45 @@ class Board {
   onSelectionChanged() {
     if (this.destroyed) return;
     this.checkStyles();
-    queueMicrotask(() => { if (!this.destroyed) this.snapshotSelection(); });
+    queueMicrotask(() => {
+      if (this.destroyed) return;
+      this.snapshotSelection();
+      const now = this.canvas.selection;
+      for (const item of this.lastSelection) if (!now.has(item) && !isEdgeItem(item)) this.checkBlankText(item);
+      this.lastSelection = new Set(now);
+    });
+  }
+
+  // ---------- empty text cards
+
+  // A text card left empty is removed once it is deselected: nothing shows on the board, it would only clutter it.
+  // Its editor hands the text to the card when editing ends, a frame or so after the deselection: wait for that.
+  checkBlankText(node, tries = 0) {
+    window.setTimeout(() => {
+      const canvas = this.canvas;
+      if (this.destroyed || canvas.readonly || canvas.nodes.get(node.id) !== node || canvas.selection.has(node)) return;
+      if (node.isEditing) { if (tries < 40) this.checkBlankText(node, tries + 1); return; }
+      if (!isBlankText(node.getData())) return;
+      const cm = node.child && node.child.editMode && node.child.editMode.cm; // an editor still open: its text counts
+      if (cm && cm.state && cm.state.doc.toString().trim()) return;
+      if (typeof canvas.getEdgesForNode === 'function' && canvas.getEdgesForNode(node).length) return; // an arrow end
+      this.removeBlankText(node);
+    }, tries ? 50 : 0);
+  }
+
+  // Removes the card from the board and from the undo history, so Ctrl+Z does not bring back an invisible card.
+  removeBlankText(node) {
+    const canvas = this.canvas;
+    const push = canvas.requestPushHistory;
+    if (push && typeof push.run === 'function') push.run(); // a pending undo step goes in first, with the card
+    canvas.removeNode(node);
+    const h = canvas.history;
+    if (!h || !Array.isArray(h.data) || !Number.isInteger(h.current) || !h.data.length) { canvas.requestSave(); return; }
+    const next = historyWithoutBlank(h.data, h.current, node.id);
+    h.data.splice(0, h.data.length, ...next.entries);
+    h.current = next.current;
+    canvas.requestSave(false); // saves the file; the present state is the current undo step already
+    if (typeof canvas.updateHistoryUI === 'function') canvas.updateHistoryUI();
   }
 
   afterImport() {
@@ -2398,7 +2545,7 @@ class Board {
     const base = { sticky: 'var(--gb-sticky)', shape: 'var(--gb-card)' }[st.kind] || 'transparent';
     this.popSwatchButton('fill', t('popup.fill'), { color: st.sa.gbFill || base }, (panel) => {
       panel.createDiv({ cls: 'gb-p-title', text: t('popup.fill') });
-      this.popColors(panel, { value: st.sa.gbFill || null, def: true, none: true, onPick: (c) => this.applyStylePatch({ gbFill: c }) });
+      this.popColors(panel, { value: st.sa.gbFill || null, def: true, none: true, onPick: (c) => this.applyPopup((d) => withFill(d, c)) });
     });
   }
 
@@ -2473,8 +2620,10 @@ class Board {
 
   pop_textColor(st) {
     const value = st.sa.gbTextColor || null;
-    const shown = value || (st.kind === 'text' && st.data.color) || (st.kind === 'sticky' ? 'var(--gb-sticky-ink)' : 'var(--gb-ink)');
-    this.popLetterButton('textColor', t('popup.textColor'), { letter: 'A', bar: st.kind === 'sticky' && !value ? '#FFF59A' : shown, dropdown: (panel) => {
+    const ink = inkFor(st.sa.gbFill); // the automatic text colour on a fill of its own
+    const shown = value || (st.kind === 'text' && st.data.color) || (ink && INK_VARS[ink]['--text-normal'])
+      || (st.kind === 'sticky' ? 'var(--gb-sticky-ink)' : 'var(--gb-ink)');
+    this.popLetterButton('textColor', t('popup.textColor'), { letter: 'A', bar: st.kind === 'sticky' && !value && !ink ? '#FFF59A' : shown, dropdown: (panel) => {
       panel.createDiv({ cls: 'gb-p-title', text: t('popup.textColor') });
       this.popColors(panel, { value, def: true, onPick: (c) => this.applyStylePatch({ gbTextColor: c }) });
     } });
@@ -3028,7 +3177,8 @@ class CultCanvasPlugin extends obsidian.Plugin {
     const color = themed ? getComputedStyle(node.nodeEl).getPropertyValue('--canvas-color').trim() : '';
     if (color) body.style.setProperty('--canvas-color', color);
     else body.style.removeProperty('--canvas-color');
-    applyNodeVars(body, node.getData().styleAttributes || {});
+    const data = node.getData();
+    applyNodeVars(body, data.styleAttributes || {}, data);
     doc.documentElement.addClass('gb-editor-root');
     body.addClass('gb-editor');
   }
@@ -3179,7 +3329,7 @@ class CultCanvasPlugin extends obsidian.Plugin {
     const el = node && node.nodeEl;
     if (!el) return;
     this.patchNodeZ(node);
-    applyNodeVars(el, styleOf(node));
+    applyNodeVars(el, styleOf(node), node.getData());
     const s = strokeOf(node);
     const container = el.querySelector(':scope > .canvas-node-container');
     if (!s || !container) {

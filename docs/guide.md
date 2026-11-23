@@ -38,7 +38,7 @@ The toolbar is on the left of every canvas. Hotkeys work while the cursor is not
 | V | Select | the usual Canvas selection: click, selection box, drag |
 | H | Hand | pan the board |
 | S | Sticky note | click for a 220x220 note, drag for your own size; typing starts at once |
-| T | Text | text without a border |
+| T | Text | text without a border; left empty, it is removed as soon as you click elsewhere |
 | R | Shape | rectangle, oval, diamond, circle, parallelogram, document, database (pick it in the panel) |
 | P | Marker | freehand lines; the panel has a width slider (1-30 px), 5 colors and your own colors; a line keeps one width along its length however fast you move; with Shift held the line is straight |
 | E | Eraser | erases the marker lines you drag over |
@@ -123,6 +123,9 @@ The bar above the selection shows what fits the selected objects, and the chosen
 - arrow: color, line (shape, dashes, thickness), ends (direction and arrowhead);
 - frame: fill and border; image, note and web page: border.
 
+On a fill of its own the text turns dark or light by itself so it reads, and so do links. A text color you
+picked stays while it reads on the new fill; otherwise changing the fill gives the text the automatic color back.
+
 Bold, highlight and list change the whole card and are written as Markdown in its text. "..." opens the
 context menu. When objects of different kinds are selected, the bar shows "Filter": pick a kind in the list to
 keep only those objects selected.
@@ -150,7 +153,7 @@ edit of the file on disk even while the board is open. New ids are 16 hex charac
 | Sticky note | the same + `"styleAttributes":{"gbKind":"sticky"}` |
 | Text without border | `"styleAttributes":{"gbKind":"text"}` |
 | Text size | `"gbFontSize":24` (pixels, 8-200) in `styleAttributes`; older boards: `"gbSize":"s"`, `"l"` or `"xl"`; no field - 18 |
-| Card colors | `"gbFill"`, `"gbBorder"`, `"gbTextColor"`, `"gbHighlight"` in `styleAttributes`: `"#RRGGBB"` (`"transparent"` for no fill) |
+| Card colors | `"gbFill"`, `"gbBorder"`, `"gbTextColor"`, `"gbHighlight"` in `styleAttributes`: `"#RRGGBB"` (`"transparent"` for no fill); with `gbFill` and no `gbTextColor` the text color is picked to read on the fill |
 | Line spacing | `"gbLineHeight":1.5` in `styleAttributes` |
 | Arrow thickness | `"gbWidth":5` (pixels, 1-12) in the `styleAttributes` of the edge |
 | Shape | `"styleAttributes":{"shape":"diamond","textAlign":"center"}`; shapes: `pill`, `diamond`, `circle`, `parallelogram`, `document`, `database`, `predefined-process`; no `shape` - rectangle |
