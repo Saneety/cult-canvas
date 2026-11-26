@@ -196,7 +196,9 @@ store them, so it stays.
 
 Releases are built by GitHub Actions. Raise the version in `manifest.json` and `versions.json`, commit, then push
 an annotated tag equal to that version, its message being the release notes (`git tag -a 0.1.2 -m "..."`,
-`git push origin 0.1.2`). `.github/workflows/release.yml` runs the tests, attests `main.js`, `manifest.json` and
+`git push origin 0.1.2`). `node scripts/release.mjs 0.1.2 "<notes>" [--vault <vault>]` does all of this after the
+feature work is committed: checks, the version bump, tests, the commit, the tag and the push, then copies the plugin
+into the vault. `.github/workflows/release.yml` runs the tests, attests `main.js`, `manifest.json` and
 `styles.css` and publishes the release. Check a downloaded file with
 `gh attestation verify main.js --repo Saneety/cult-canvas`. Keep `!important` and `:has()` out of `styles.css`:
 the plugin directory's CSS check warns about them, and a test fails on them.
